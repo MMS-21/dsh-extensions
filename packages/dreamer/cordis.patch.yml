@@ -1,0 +1,11 @@
+- insert:
+    - id: dreamer
+      name: '@local/dsh-plugin-dreamer'
+      config:
+        enabled: true
+        automatic: true
+        intervalMinutes: 720
+        idleMinutes: 15
+        deepSleepMinutes: 60
+        maxTokens: 900
+        injectMaxChars: 2000

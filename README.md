@@ -7,11 +7,12 @@ Local version-controlled source for the DSH extensions developed in this workspa
 | `packages/render-ui` | OpenUI rendering, artifacts, AnalyticsDashboard, StatusBars, source schemas, tests and Desktop installer |
 | `packages/whiteboard` | Whiteboard canvas, workspace/session bridge, agent cursors, compact note prompts, Host tools and tests |
 | `packages/agent-desktop` | Pinned native MCP dependency manifest, protocol/runtime verification and profile setup scripts |
+| `packages/dreamer` | DSH-native idle reflection, dream journal, grounded insights, wake context, commands and parity audit |
 
 This baseline was imported from the working source snapshots on 13 November 2026.
 It is a new Git history, not a reconstruction of earlier edits. Deployment is a
 separate step; installed DSH copies still have their existing locations.
-Dreamer has not been ported or added to this repository yet.
+Dreamer is a subsequent native port; its package documents verification and explicit differences from Hermes 1.5.0.
 
 ## Setup and verification
 
@@ -23,12 +24,14 @@ cd packages/render-ui
 pnpm install --frozen-lockfile --ignore-scripts
 cd ../whiteboard
 npm ci --ignore-scripts
+cd ../dreamer
+npm ci --ignore-scripts --legacy-peer-deps
 cd ../..
 npm test
 ```
 
-`npm test` builds OpenUI and runs its unit/contract tests, then Whiteboard tests.
-The imported baseline passed 62 OpenUI and 50 Whiteboard tests (112 total).
+`npm test` builds OpenUI and runs its unit/contract tests, then Whiteboard and Dreamer tests.
+The imported baseline passed 62 OpenUI and 50 Whiteboard tests (112 total). Dreamer adds its own suite.
 The Windows junction regression needs a process allowed to create a temporary
 junction. Generated bundles, dependencies and verification artifacts are ignored.
 
@@ -53,6 +56,8 @@ or your shell, not committed source.
   Client/Host changes. Do not replace board/session data as part of deployment.
 - agent-desktop: see its README. Generate a local MCP block, validate it, then
   explicitly apply it. The real profile file never belongs in this repository.
+- Dreamer: install its locked dependencies with `npm ci --ignore-scripts --legacy-peer-deps`,
+  run tests, then close DSH and run its `install-desktop.ps1`. Read PARITY.md first.
 
 ## What belongs in Git
 
@@ -78,6 +83,6 @@ git commit -m "Describe the change"
 ```
 
 The hook is enabled locally using `git config core.hooksPath .githooks`. New clones
-should run that command too. This is a local repository with no remote configured;
-GitHub publication or another remote backup requires a separate decision.
+should run that command too. Check `git remote -v` for your configured publication
+destination before pushing.
 
