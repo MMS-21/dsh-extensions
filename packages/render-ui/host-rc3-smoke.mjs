@@ -1,0 +1,42 @@
+import {dshRuntimeRoot} from '../../scripts/local-paths.mjs';
+// Actual packaged DSH services in Electron's Node mode; no GUI or model calls.
+import assert from 'node:assert/strict';
+import {pathToFileURL} from 'node:url';
+import {writeFileSync} from 'node:fs';
+const base=pathToFileURL(dshRuntimeRoot()+'node_modules/@deepseek-ai/').href;
+const {Context}=await import(base+'cordis/lib/index.js');
+const {ToolRuntime}=await import(base+'dsh-tools/lib/index.js');
+const {NativeToolExecutor}=await import(base+'dsh-tool-executor-native/lib/index.js');
+const {createScope}=await import(base+'dsh-scope/lib/index.js');
+const {executeUiTool}=await import('./lib/tool-execution.js');
+const {validateJsonSchemaValue}=await import('./lib/tool-schema.js');
+const {installToolExecution}=await import('./lib/tool-execution-host.js');
+const ctx=new Context();
+const provide=(name,value)=>{ctx.provide(name);ctx.set(name,value);};
+provide('systemPrompt',{tools(){}});
+new ToolRuntime(ctx,{mode:'native'});
+ctx.tools.setExecutor(new NativeToolExecutor(ctx));
+const agent={session:{id:'openui-rc3-smoke'}};
+const scope=createScope(ctx,agent);agent.ctx=scope.ctx;
+provide('agents',{get:id=>id===agent.session.id?agent:undefined});
+let executions=0;
+ctx.tools.register({name:'fixture_lookup',description:'Isolated compatibility fixture',parameters:{type:'object',properties:{city:{type:'string'}},required:['city'],additionalProperties:false},output:{schema:{type:'object',properties:{label:{type:'string'}},required:['label']},render(_args,value){return [{type:'text',text:value.label}];}},async execute(args){executions++;return {label:'Lookup '+args.city};}});
+ctx.on('tools/pre-execute',async(exec,next)=>exec.arguments.city==='blocked'?{kind:'deny',reason:'Fixture policy denied'}:exec.arguments.city==='approval'?{kind:'ask',reason:'Fixture approval required'}:next());
+let route;
+provide('connection',{fetch:{register(value){route=value;return ()=>{};}}});
+installToolExecution(ctx);
+const signal=new AbortController().signal;
+async function call(city){
+ const response=await route.fetch({signal,json:async()=>({type:'client-request',rpcId:'fixture',method:'openuiToolExecution/execute',payload:{args:{agentId:agent.session.id,request:{name:'fixture_lookup',arguments:{city}}}}})});
+ return (await response.json()).result;
+}
+const first=await call('Cairo');
+assert.deepEqual(first.value,{label:'Lookup Cairo'},JSON.stringify(first));
+const denied=await call('blocked');assert.equal(denied.ok,false);assert.match(denied.error.message,/Fixture policy denied/);
+const approval=await call('approval');assert.equal(approval.ok,false);assert.match(approval.error.message,/approval/i);
+const invalid=await call(9);assert.equal(invalid.ok,false);assert.match(invalid.error.message,/Invalid tool arguments/);
+await assert.rejects(()=>executeUiTool(ctx,agent,{name:'missing',arguments:{}},signal,validateJsonSchemaValue));
+assert.equal(executions,1);
+console.log('PASS: actual packaged rc.3 ToolRuntime, scoped execution, plugin route, argument validation, policy denial and missing-approval denial.');
+writeFileSync(new URL('./rc3-smoke-result.json',import.meta.url),JSON.stringify({runtime:'0.2.2-rc.3',actualPackagedRuntime:true,toolExecution:true,argumentValidation:true,policyDenial:true,missingApprovalDenial:true,executions},null,2));
+await scope.dispose();

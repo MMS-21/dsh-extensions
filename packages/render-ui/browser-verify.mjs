@@ -1,0 +1,30 @@
+import fs from 'node:fs';import assert from 'node:assert/strict';
+const tabs=await fetch('http://127.0.0.1:9228/json/list').then(r=>r.json());
+const tab=tabs.find(t=>t.type==='page');if(!tab)throw Error('No browser test page');
+const ws=new WebSocket(tab.webSocketDebuggerUrl);await new Promise((resolve,reject)=>{ws.onopen=resolve;ws.onerror=reject;});let next=0;const pending=new Map();
+const networkRequests=[];
+ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.method==='Network.requestWillBeSent')networkRequests.push(m.params.request.url);if(m.id){const p=pending.get(m.id);pending.delete(m.id);m.error?p.reject(Error(m.error.message)):p.resolve(m.result);}};
+function call(method,params={}){return new Promise((resolve,reject)=>{const id=++next;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));});}
+async function evaluate(expression){const r=await call('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.text);return r.result.value;}
+await call('Page.enable');await call('Network.enable');await call('Page.addScriptToEvaluateOnNewDocument',{source:'window.process={env:{OPENUI_RUNTIME_TELEMETRY_ENABLED:"1"}};'});await call('Emulation.setDeviceMetricsOverride',{width:1100,height:1000,deviceScaleFactor:1,mobile:false});
+await call('Page.navigate',{url:new URL('./openui-preview.html',import.meta.url).href});
+const initial=await evaluate(`new Promise((resolve,reject)=>{let n=0;function check(){if(document.querySelectorAll('.dsh-openui-surface').length>=5){requestAnimationFrame(()=>resolve({text:document.body.innerText,surfaces:document.querySelectorAll('.dsh-openui-surface').length,errors:window.__dshTest?.errors||[]}));}else if(n++>300)reject(Error('Render timeout'));else requestAnimationFrame(check);}check();})`);
+assert.equal(initial.surfaces,5);assert.deepEqual(initial.errors,[]);assert.doesNotMatch(initial.text,/UI diagnostics/);assert.match(initial.text,/decision/i);assert.match(initial.text,/mock/i);
+await evaluate(`(()=>{const tab=[...document.querySelectorAll('[role="tab"]')].find(x=>x.textContent==='Request');if(!tab)throw Error('No request tab');tab.click();})()`);
+await evaluate(`new Promise(resolve=>requestAnimationFrame(resolve))`);
+await evaluate(`(()=>{const input=document.querySelector('input');if(!input)throw Error('No form input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'feature/openui');input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+await evaluate(`new Promise(resolve=>requestAnimationFrame(resolve))`);
+await evaluate(`(()=>{const button=[...document.querySelectorAll('button')].find(x=>x.textContent==='Ask agent');if(!button)throw Error('No ask button');button.click();})()`);
+const review=await evaluate(`new Promise(resolve=>requestAnimationFrame(()=>resolve(document.body.innerText)))`);assert.match(review,/review before sending/i);assert.match(review,/feature\/openui/);
+assert.equal(await evaluate('window.__dshTest.requests.length'),0);
+await evaluate(`(()=>{const button=[...document.querySelectorAll('button')].find(x=>x.textContent==='Send request to agent');button.click();})()`);
+const sent=await evaluate(`new Promise(resolve=>requestAnimationFrame(()=>resolve(window.__dshTest.requests)))`);assert.equal(sent.length,1);assert.match(sent[0],/feature\/openui/);
+const click=await evaluate(`(()=>{const node=document.querySelector('svg [role="button"]');if(!node)throw Error('No interactive graph node');node.dispatchEvent(new MouseEvent('click',{bubbles:true}));return {label:node.getAttribute('aria-label'),graphs:document.querySelectorAll('svg').length};})()`);
+const selected=await evaluate(`new Promise(resolve=>requestAnimationFrame(()=>resolve(document.body.innerText)))`);assert.match(selected,/No additional detail|Selected|Inspect|Run|Check|review|test/i);
+const image=await call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});fs.writeFileSync('openui-preview.png',Buffer.from(image.data,'base64'));
+await call('Emulation.setDeviceMetricsOverride',{width:420,height:900,deviceScaleFactor:1,mobile:false});
+const narrow=await evaluate(`new Promise(resolve=>requestAnimationFrame(()=>resolve({width:innerWidth,bodyWidth:document.documentElement.scrollWidth,errors:window.__dshTest.errors})))`);
+assert.deepEqual(narrow.errors,[]);assert.ok(narrow.bodyWidth<=narrow.width+2,`page overflow: ${JSON.stringify(narrow)}`);
+const externalRequests=networkRequests.filter(url=>/^https?:/.test(url));assert.deepEqual(externalRequests,[],'Unexpected external request');
+const report={initial:{surfaces:initial.surfaces,errors:initial.errors},interaction:click,reviewedRequests:sent.length,narrow,externalRequests,actualPluginBundle:true};fs.writeFileSync('browser-verification.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
+await call('Browser.close');ws.close();

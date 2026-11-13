@@ -1,0 +1,3 @@
+- insert:
+    - id: render-ui
+      name: '@local/dsh-plugin-render-ui'

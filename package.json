@@ -1,0 +1,9 @@
+{
+  "name":"dsh-extensions-source",
+  "private":true,
+  "scripts":{
+    "audit:staged":"node scripts/audit-staged.mjs",
+    "test":"node scripts/test.mjs"
+  }
+}
+

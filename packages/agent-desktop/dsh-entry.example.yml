@@ -1,0 +1,14 @@
+# Example only. install-profile.mjs generates the ignored dsh-entry.yml locally.
+- insert:
+    - id: mcp-agent-desktop
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: agent_desktop
+        transport: stdio
+        command: '/ABSOLUTE/PATH/TO/agent-desktop-win32-x64.exe'
+        args: ['mcp']
+        cwd: '/ABSOLUTE/PATH/TO/THIS/PACKAGE'
+        toolCallTimeoutMs: 60000
+        startupTimeoutMs: 15000
+        failOnStartupError: false
+

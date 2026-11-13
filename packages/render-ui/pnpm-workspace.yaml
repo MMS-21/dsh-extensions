@@ -1,0 +1,6 @@
+allowBuilds:
+  '@openuidev/lang-core': false
+  esbuild: false
+minimumReleaseAgeExclude:
+  - '@openuidev/lang-core@1.1.0'
+  - '@openuidev/react-lang@1.1.0'

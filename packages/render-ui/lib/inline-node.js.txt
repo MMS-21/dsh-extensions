@@ -1,0 +1,62 @@
+/* Embed inside the existing module factory (uses its React binding).
+ * Client inject must include both 'slots' and 'uiConversation'.
+ * Call registerInlineNode(ctx, RenderUi) once from apply.
+ * RenderUi receives { spec }, the already validated persisted spec, directly.
+ * Host output.presentationMeta must emit { tool: 'render_ui', version: 1, spec }.
+ * Existing tool-call projection is intentionally retained (no exclusive claim).
+ */
+function registerInlineNode(ctx, RenderUi) {
+  const kind = 'local-render-ui-inline';
+  function resultState(match) {
+    const event = match.event;
+    return {
+      seq: event.seq,
+      callId: String(event.data.message.source.callId),
+      spec: event.data.meta.spec,
+    };
+  }
+  // The registry owns this contribution as a Cordis effect, including HMR cleanup.
+  ctx.uiConversation.events.register({
+    kind,
+    target: 'chat',
+    match: {
+      'tool/result': function (event) {
+        const data = event.data;
+        const meta = data.meta;
+        if (data.message.isError === true || data.error !== undefined
+          || meta === null || typeof meta !== 'object' || Array.isArray(meta)
+          || meta.tool !== 'render_ui' || meta.version !== 1
+          || meta.spec === null || typeof meta.spec !== 'object' || Array.isArray(meta.spec)
+          || meta.spec.view !== 'openui' || typeof meta.spec.lang !== 'string') return null;
+        // A result is a whole checkpoint: no tool/call or transient state needed.
+        return { id: String(data.message.source.callId), role: 'start' };
+      },
+    },
+    start: function (_context, match) { return resultState(match); },
+    update: function (_context, match) { return resultState(match); },
+    buildViewNode: function (context) {
+      const state = context.state;
+      if (state === undefined) return null;
+      return {
+        key: context.key,
+        kind,
+        id: context.id,
+        target: 'chat',
+        anchorSeq: state.seq,
+        location: context.start?.location ?? context.matches[0]?.location ?? { kind: 'unresolved' },
+        visibility: 'visible',
+        // Outside both step-run grouping and completed-Turn process folding.
+        groupTree: 'turn',
+        data: { callId: state.callId, spec: state.spec },
+      };
+    },
+  });
+  function InlineRenderUi(props) {
+    return React.createElement(RenderUi, { spec: props.node.data.spec });
+  }
+  // The injector waits for the actual slot declaration and tracks registration
+  // teardown/redeclaration automatically; do not add global hooks or DOM hacks.
+  ctx.slots.inject('conversation.chat.node', function () {
+    return ctx.slots.register({ name: 'conversation.chat.node', key: kind }, InlineRenderUi);
+  });
+}

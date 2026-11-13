@@ -1,0 +1,1 @@
+{"name":"dsh-agent-desktop-local","version":"1.0.0","private":true,"description":"Pinned agent-desktop MCP integration for local DSH","scripts":{"verify":"node verify-mcp.mjs"},"dependencies":{"agent-desktop":"1.3.0"}}

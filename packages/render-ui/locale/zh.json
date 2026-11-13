@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "渲染 UI",
+    "description": "使用完整的标准组件库渲染 OpenUI Lang 内联演示，并在侧边栏提供实时示例面板。"
+  }
+}

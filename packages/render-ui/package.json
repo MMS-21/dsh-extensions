@@ -1,0 +1,72 @@
+{
+  "name": "@local/dsh-plugin-render-ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenUI Lang inline presentations: a render_ui tool with the full standard component library and session-scoped Query/Mutation tool execution.",
+  "scripts": {
+    "build": "node build-openui.mjs",
+    "test": "node --test --test-isolation=none *.test.js",
+    "build:preview": "node build-preview.mjs"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "lib/**/*.js",
+    "lib/*.json",
+    "lib/*.txt",
+    "lib/*.mjs",
+    "locale/*.json",
+    "icon.svg",
+    "cordis.patch.yml",
+    "package.json",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-tool"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.3"
+  },
+  "dependencies": {
+    "@openuidev/dashboard-library": "^0.0.1",
+    "@openuidev/react-headless": "0.18.1",
+    "@openuidev/react-lang": "1.1.0",
+    "@openuidev/react-ui": "0.18.1",
+    "clsx": "^2.1.1",
+    "motion": "^14.12.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "skullet": "0.0.3",
+    "tailwind-merge": "^3.7.0",
+    "zod": "4.3.6",
+    "zustand": "4.5.7"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "playwright-core": "1.64.1"
+  }
+}
