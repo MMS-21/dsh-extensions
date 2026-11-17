@@ -7,6 +7,7 @@ Local version-controlled source for the DSH extensions developed in this workspa
 | `packages/render-ui` | OpenUI rendering, artifacts, AnalyticsDashboard, StatusBars, source schemas, tests and Desktop installer |
 | `packages/whiteboard` | Whiteboard canvas, workspace/session bridge, agent cursors, compact note prompts, Host tools and tests |
 | `packages/agent-desktop` | Pinned native MCP dependency manifest, protocol/runtime verification and profile setup scripts |
+| `packages/request-budget` | Serialized request byte limits, durable 413 recovery, tests and Desktop installer |
 | `packages/dreamer` | DSH-native idle reflection, dream journal, grounded insights, wake context, commands and parity audit |
 
 This baseline was imported from the working source snapshots on 13 November 2026.
@@ -30,7 +31,7 @@ cd ../..
 npm test
 ```
 
-`npm test` builds OpenUI and runs its unit/contract tests, then Whiteboard and Dreamer tests.
+`npm test` builds OpenUI and runs its unit/contract tests, then Whiteboard, Dreamer and Request Budget tests.
 The imported baseline passed 62 OpenUI and 50 Whiteboard tests (112 total). Dreamer adds its own suite.
 The Windows junction regression needs a process allowed to create a temporary
 junction. Generated bundles, dependencies and verification artifacts are ignored.
@@ -56,6 +57,7 @@ or your shell, not committed source.
   Client/Host changes. Do not replace board/session data as part of deployment.
 - agent-desktop: see its README. Generate a local MCP block, validate it, then
   explicitly apply it. The real profile file never belongs in this repository.
+- Request Budget: run `npm test` in `packages/request-budget`, then run its `install-desktop.ps1` and restart DSH. No package dependencies are required.
 - Dreamer: install its locked dependencies with `npm ci --ignore-scripts --legacy-peer-deps`,
   run tests, then close DSH and run its `install-desktop.ps1`. Read PARITY.md first.
 

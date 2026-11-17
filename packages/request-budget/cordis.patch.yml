@@ -1,0 +1,6 @@
+- insert:
+    - id: request-budget
+      name: '@local/dsh-plugin-request-budget'
+      config:
+        maxRequestBytes: 8000000
+        maxRecoveryAttempts: 8
