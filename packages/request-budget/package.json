@@ -1,0 +1,42 @@
+{
+  "name": "@local/dsh-plugin-request-budget",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs"
+  },
+  "files": [
+    "index.mjs",
+    "budget.mjs",
+    "cordis.patch.yml",
+    "README.md",
+    "install-desktop.ps1",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "test:dsh": "node test-dsh-runtime.mjs"
+  },
+  "description": "Byte-aware request limits and replay-safe 413 recovery for DeepSeek Harness.",
+  "license": "MIT",
+  "author": "MMS-21",
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MMS-21/dsh-extensions.git",
+    "directory": "packages/request-budget"
+  },
+  "bugs": {
+    "url": "https://github.com/MMS-21/dsh-extensions/issues"
+  },
+  "homepage": "https://github.com/MMS-21/dsh-extensions/tree/main/packages/request-budget"
+}
