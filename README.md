@@ -1,5 +1,7 @@
 # DSH extensions
 
+Compatibility monitoring and dependency updates are documented in [UPDATES.md](UPDATES.md).
+
 Local version-controlled source for the DSH extensions developed in this workspace.
 
 | Package | Contents |

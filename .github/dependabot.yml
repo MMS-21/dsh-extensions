@@ -1,0 +1,18 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directories:
+      - /packages/agent-state-light
+      - /packages/session-delete
+      - /packages/render-ui
+      - /packages/whiteboard
+      - /packages/dreamer
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: '@deepseek-ai/*'
+    open-pull-requests-limit: 5
