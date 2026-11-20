@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Power BI Live Designer",
+    "description": "检查 Power BI 模型，暂存和验证文件更改，经用户批准后应用、恢复并安全重载画布。"
+  }
+}

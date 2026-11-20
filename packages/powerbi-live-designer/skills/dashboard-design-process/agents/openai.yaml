@@ -1,0 +1,5 @@
+interface:
+  display_name: "Dashboard Design Process"
+  short_description: "Drive dashboard design from context to mockup"
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,5 @@
+interface:
+  display_name: "Dashboard Design Review"
+  short_description: "Review and critique dashboards against evidence"
+policy:
+  allow_implicit_invocation: true

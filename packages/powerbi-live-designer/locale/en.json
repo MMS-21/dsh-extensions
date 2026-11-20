@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Power BI Live Designer",
+    "description": "Inspect a Power BI model and stage, validate, approve, apply and recover report/model file changes with guarded canvas reload."
+  }
+}

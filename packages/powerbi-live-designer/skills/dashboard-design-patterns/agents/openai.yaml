@@ -1,0 +1,5 @@
+interface:
+  display_name: "Dashboard Design Patterns"
+  short_description: "Patterns, genres, tradeoffs, process"
+policy:
+  allow_implicit_invocation: true

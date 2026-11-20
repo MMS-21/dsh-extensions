@@ -1,0 +1,50 @@
+{
+  "name": "@local/dsh-plugin-powerbi-live-designer",
+  "version": "0.4.2",
+  "private": true,
+  "description": "Power BI authoring with exact user-approved changes, guarded canvas reload and verified affected-table data refresh.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "skills.js",
+    "skills/**",
+    "SKILLS-SOURCE.md",
+    "py-service/*.py",
+    "py-service/web/**",
+    "start-coordinator.ps1",
+    "LICENSE.skills",
+    "design-contracts.js",
+    "microsoft-mcp.mjs",
+    "model-validator.mjs",
+    "model-refresh.mjs",
+    "desktop-binding.mjs"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
+      ]
+    }
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "test:python": "python -B -m unittest discover -s py-service/tests -v"
+  }
+}
