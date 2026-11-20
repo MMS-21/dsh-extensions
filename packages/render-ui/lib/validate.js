@@ -1,6 +1,7 @@
 /** Strict, bounded model-input validation shared by execution and metadata projection. */
 import { normalizeOpenUi } from './openui-validate.js';
-import { normalizeDashboardUi } from './dashboard-validate.js';
+import {normalizeDashboardUi, normalizeDashboardV2Ui} from './dashboard-validate.js';
+import {isDashboardLibrary} from './dashboard-dialect.js';
 import { validateDataOptions } from './data-snapshot.js';
 const forbidden = new Set(['__proto__', 'prototype', 'constructor']);
 function fail(message) { throw new TypeError(`Invalid UI spec: ${message}`); }
@@ -14,7 +15,7 @@ function object(value, keys, at) {
 export function normalizeSpec(args) {
   object(args, ['lang', 'miniApp', 'title', 'library', 'placement', 'dataFile', 'selectionKeys', 'revisionOf'], 'arguments');
   validateDataOptions(args);
-  if (args.library !== undefined && args.library !== 'standard' && args.library !== 'dashboard') fail('library must be "standard" or "dashboard"');
+  if (args.library !== undefined && args.library !== 'standard' && !isDashboardLibrary(args.library)) fail('library must be "standard", "dashboard", or "dashboard-v2"');
   if (args.placement !== undefined && !['inline', 'artifact'].includes(args.placement)) fail('placement must be "inline" or "artifact"');
   if (args.lang === undefined && args.miniApp === undefined) fail('lang is required for OpenUI, or supply miniApp');
   let spec;
@@ -30,7 +31,9 @@ export function normalizeSpec(args) {
     if (args.title !== undefined && (typeof args.title !== 'string' || args.title.length > 200)) fail('title must be at most 200 characters');
     spec = {view:'mini-app', placement:'artifact', title:args.title ?? 'Interactive tool', miniApp:{html, css, code}};
   } else {
-    spec = args.library === 'dashboard' ? normalizeDashboardUi(args.lang, args.title) : normalizeOpenUi(args.lang, args.title);
+    const normalize = args.library === 'dashboard-v2' ? normalizeDashboardV2Ui
+      : args.library === 'dashboard' ? normalizeDashboardUi : normalizeOpenUi;
+    spec = normalize(args.lang, args.title);
   }
   if (args.revisionOf !== undefined) {
     let target;
@@ -41,6 +44,6 @@ export function normalizeSpec(args) {
       || !target[0] || !Number.isSafeInteger(target[1]) || target[1] < 1) fail('revisionOf must be the saved artifact revision reference');
     return {...spec, placement: 'artifact', revisionOf: target};
   }
-  return args.placement === 'artifact' || (args.placement === undefined && args.library === 'dashboard')
+  return args.placement === 'artifact' || (args.placement === undefined && isDashboardLibrary(args.library))
     ? {...spec, placement: 'artifact'} : spec;
 }

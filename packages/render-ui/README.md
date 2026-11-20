@@ -14,7 +14,9 @@ real Query-backed data. Examples must set `mock=true`. Optional `answerTool` nam
 an existing session tool; otherwise questions draft into the source chat for
 review and Send. Neither component creates a data-provider or model backend.
 
-The separate `library: dashboard` dialect remains supported. Existing artifact,
+The original `library: dashboard` dialect still renders saved dashboards. Use
+`library: dashboard-v2` with `ui_library` and `render_ui` for Dashboard Library
+1.0.1 and its Dashboard/Section/Row/Card grammar. Existing artifact,
 snapshot, form-state, streaming isolation and native tool-execution behavior is
 covered by tests. View-local appearance/bookmarks are not backend account changes.
 

@@ -12,6 +12,7 @@ import { readDataSnapshot } from './data-snapshot.js';
 import {installToolExecution} from './tool-execution-host.js';
 import openuiInstructions from './openui-instructions.json' with { type: 'json' };
 import dashboardInstructions from './dashboard-instructions.json' with { type: 'json' };
+import dashboardV2Instructions from './dashboard-v2-instructions.json' with { type: 'json' };
 
 export const name = "render-ui";
 export const inject = ["tools", "agents", "systemPrompt", "sessionProjections"];
@@ -149,12 +150,13 @@ export function apply(ctx) {
   }
   ctx.tools.register({
     name: 'ui_library',
-    description: 'Get the complete OpenUI Lang instructions and full component catalog for render_ui. Pass library "standard" (default) for the general component library, or "dashboard" for the dashboard layout grammar.',
+    description: 'Get the complete OpenUI Lang instructions and full component catalog for render_ui. Pass library "standard" (default) for the general component library, or "dashboard" for the original dashboard layout grammar. Use "dashboard-v2" for the Dashboard/Section/Row/Card catalog.',
     parameters: {type:'object',additionalProperties:false,properties:{
-      library: { type: 'string', enum: ['standard', 'dashboard'], description: 'Which component library instructions to return. Defaults to standard.' }
+      library: { type: 'string', enum: ['standard', 'dashboard', 'dashboard-v2'], description: 'Which component library instructions to return. Defaults to standard.' }
     }},
     output: {schema:{type:'string'},render(_args,value){return [{type:'text',text:String(value)}];}},
     async execute(args){
+      if (args?.library === 'dashboard-v2') return dashboardV2Instructions.instructions;
       return args?.library === 'dashboard' ? dashboardInstructions.instructions : openuiInstructions.instructions;
     },
   });
@@ -176,7 +178,7 @@ export function apply(ctx) {
         dataFile: { type: 'string', description: 'Optional JSON object filename in the session workspace .dsh-ui-data directory. Read it in the view with Query("ui_snapshot", {}, {}). Maximum 64 KiB.' },
         revisionOf: { type: 'string', description: 'Use the exact saved artifact revision reference supplied by the user to propose an update.' },
         selectionKeys: { type: 'array', items: {type: 'string'}, description: 'Up to 12 state binding names without $ to carry to the sidebar and save with the snapshot.' },
-        library: { type: 'string', enum: ['standard', 'dashboard'], description: 'Component library: "standard" (default) or "dashboard" (Dashboard/Section/CardRow layout grammar).' },
+        library: { type: 'string', enum: ['standard', 'dashboard', 'dashboard-v2'], description: 'Component library: "standard" (default), "dashboard" (original dashboard grammar), or "dashboard-v2" (new dashboard grammar).' },
       },
     },
     output: {
