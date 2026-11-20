@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Session delete",
+    "description": "Adds a Delete action to session rows that permanently removes the session and its stored history."
+  }
+}
