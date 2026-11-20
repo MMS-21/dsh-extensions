@@ -1,0 +1,4 @@
+- insert:
+    - id: powerbi-live-designer
+      name: '@local/dsh-plugin-powerbi-live-designer'
+      config: {}

@@ -7,6 +7,7 @@ Local version-controlled source for the DSH extensions developed in this workspa
 | `packages/render-ui` | OpenUI rendering, artifacts, AnalyticsDashboard, StatusBars, source schemas, tests and Desktop installer |
 | `packages/whiteboard` | Whiteboard canvas, workspace/session bridge, agent cursors, compact note prompts, Host tools and tests |
 | `packages/agent-desktop` | Pinned native MCP dependency manifest, protocol/runtime verification and profile setup scripts |
+| `packages/powerbi-live-designer` | Power BI 0.4.2 controlled authoring, model refresh, exact Desktop binding, native skills and fixture tests |
 | `packages/request-budget` | Serialized request byte limits, durable 413 recovery, tests and Desktop installer |
 | `packages/dreamer` | DSH-native idle reflection, dream journal, grounded insights, wake context, commands and parity audit |
 

@@ -1,0 +1,10 @@
+{
+  "_note": "TEMPLATE ONLY. Copy to mcp_profile.json after inspecting your live MCP server schemas. Replace every placeholder and explicitly validate this Desktop version. Do not claim the sample arguments are Microsoft API schema.",
+  "desktopProcessingValidated": false,
+  "command": "npx",
+  "args": ["-y", "@microsoft/powerbi-modeling-mcp@latest", "--start"],
+  "connection": {"tool": "REPLACE_WITH_DISCOVERED_CONNECTION_TOOL", "arguments": {}},
+  "calculate": {"tool": "REPLACE_WITH_DISCOVERED_MODEL_TOOL", "arguments": {}},
+  "full": {"tool": "REPLACE_WITH_DISCOVERED_TABLE_TOOL", "arguments": {}},
+  "dax": {"tool": "REPLACE_WITH_DISCOVERED_DAX_TOOL", "arguments": {}}
+}
