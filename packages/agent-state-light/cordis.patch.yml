@@ -1,0 +1,3 @@
+- insert:
+    - id: agent-state-light
+      name: '@local/agent-state-light'

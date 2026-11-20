@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Agent state light",
+    "description": "Shows a glowing traffic-light indicator of the agent's current state under the composer."
+  }
+}
