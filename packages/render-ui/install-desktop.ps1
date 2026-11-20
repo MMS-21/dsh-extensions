@@ -14,7 +14,7 @@ $targets = @(
     (Join-Path $profile 'plugins/render-ui/lib'),
     (Join-Path $profile 'node_modules/@local/dsh-plugin-render-ui/lib')
 )
-$files = @('client.js', 'index.js', 'validate.js', 'openui-validate.js', 'dashboard-validate.js', 'data-snapshot.js', 'tool-execution.js', 'openui-instructions.json', 'openui-schema.json', 'dashboard-instructions.json', 'dashboard-schema.json', 'THIRD_PARTY_NOTICES.txt')
+$files = @('client.js', 'index.js', 'validate.js', 'openui-validate.js', 'dashboard-validate.js', 'dashboard-dialect.js', 'data-snapshot.js', 'tool-execution.js', 'openui-instructions.json', 'openui-schema.json', 'dashboard-instructions.json', 'dashboard-schema.json', 'dashboard-v2-instructions.json', 'dashboard-v2-schema.json', 'THIRD_PARTY_NOTICES.txt')
 $source = Join-Path $PSScriptRoot 'lib'
 $backup = Join-Path $PSScriptRoot ('desktop-backup-' + [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss-fff'))
 

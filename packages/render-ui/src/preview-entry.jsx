@@ -257,6 +257,11 @@ root = Stack([TextContent("Inline explanation"), TextContent("Estimate: " + data
     createRoot(document.getElementById('root')).render(<RenderUi spec={{view:'openui',title:'Broken presentation',lang:'root = Stack([TextContent("ok"), MissingWidget("x")])'}} actionBridge={async text=>window.__dshTest.requests.push(text)}/>);
     return;
   }
+  if (new URLSearchParams(location.search).has('dashboard-v2')) {
+    const lang = 'root = Dashboard([section])\nsection = Section("Dashboard v2 fixture", [])';
+    createRoot(document.getElementById('root')).render(<RenderUi spec={{view:'openui',library:'dashboard-v2',lang}}/>);
+    return;
+  }
   // Live dashboard fixture: a session_stats Query on a 2s refresh interval.
   if(new URLSearchParams(location.search).has('dashboard')) {
     createRoot(document.getElementById('root')).render(<RenderUi spec={{view:'openui',library:'dashboard',title:'Live session',lang:liveDashboardLang}} toolBridge={testBridge}/>);

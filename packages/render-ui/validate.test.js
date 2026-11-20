@@ -104,3 +104,10 @@ test('session_stats reads one consistent projection cut for the calling agent', 
   apply({ plugin() {}, tools: { register(definition) { bare.set(definition.name, definition); } } });
   await assert.rejects(bare.get('session_stats').execute({}, { agent: { session } }), TypeError);
 });
+
+test('legacy and v2 dashboards retain separate persisted grammar', () => {
+  const v2 = 'root = Dashboard([section])\nsection = Section("Dashboard v2 fixture", [])';
+  assert.equal(normalizeSpec({lang: v2, library: 'dashboard-v2'}).library, 'dashboard-v2');
+  assert.equal(normalizeSpec({lang: VALID_DASHBOARD, library: 'dashboard'}).library, 'dashboard');
+  assert.throws(() => normalizeSpec({lang: VALID_DASHBOARD, library: 'dashboard-v2'}), /Unknown component/);
+});

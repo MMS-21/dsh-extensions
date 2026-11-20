@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {build} from 'esbuild';
-import {promptOptions as dashboardPromptOptions} from '@openuidev/dashboard-library';
 const root=path.dirname(fileURLToPath(import.meta.url));
 const external=['react','react/*','react-dom','react-dom/*'];
 process.env.OPENUI_TELEMETRY_DISABLED='1';process.env.DO_NOT_TRACK='1';
@@ -31,18 +30,23 @@ fs.writeFileSync(path.join(root,'lib/openui-schema.json'),JSON.stringify(library
 fs.writeFileSync(path.join(root,'lib/openui-instructions.json'),JSON.stringify({libraryVersion:'dsh-openui-1',components:Object.keys(library.components),instructions}));
 await build({entryPoints:[path.join(root,'src/openui-validate.js')],outfile:path.join(root,'lib/openui-validate.js'),bundle:true,platform:'node',format:'esm',plugins:[noRuntimeTelemetry],define:{'process.env.NODE_ENV':'"production"'},external:['@modelcontextprotocol/sdk','@modelcontextprotocol/sdk/*']});
 await build({entryPoints:[path.join(root,'src/dashboard-library.jsx')],outfile:path.join(root,'lib/dashboard-library-build.mjs'),bundle:true,packages:'external',platform:'node',format:'esm',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'}});
-const {library: dashboardLibrary}=await import(pathToFileURL(path.join(root,'lib/dashboard-library-build.mjs')).href+'?t='+Date.now());
-const dashboardInstructions=dashboardLibrary.prompt({bindings:true,builtinFunctions:true,toolCalls:true,
-  preamble:dashboardPromptOptions.preamble,
-  examples:dashboardPromptOptions.examples,
-  additionalRules:[
-    ...dashboardPromptOptions.additionalRules,
-    'Query and Mutation call registered DSH tools through the session-scoped server executor. Existing permissions, sandboxing, tool visibility and approvals apply. Unknown tools fail. Query auto-runs on render and argument changes: use it only for intended reads. Mutation runs only through @Run after user interaction: use it for writes. Never put a write operation in Query. Saved views re-fetch Queries when reopened. No tools run in streaming previews. @ToAssistant remains available for agent-directed tasks.',
-    'No arbitrary HTML, scripts, credentials, network endpoints or executable code. Use text and registered components. Keep output within 200000 characters and bounded node/data budgets.',
-    'Render via render_ui({lang: "...OpenUI Lang...", title:"...", library:"dashboard"}). Do not wrap the DSL in JSON or markdown fences.'
-  ]});
-fs.writeFileSync(path.join(root,'lib/dashboard-schema.json'),JSON.stringify(dashboardLibrary.toJSONSchema()));
-fs.writeFileSync(path.join(root,'lib/dashboard-instructions.json'),JSON.stringify({libraryVersion:'dsh-openui-dashboard-1',components:Object.keys(dashboardLibrary.components),instructions:dashboardInstructions}));
+const {library: legacyDashboard, libraryV2, promptOptions: legacyPrompt, promptOptionsV2}=await import(pathToFileURL(path.join(root,'lib/dashboard-library-build.mjs')).href+'?t='+Date.now());
+for (const [name, version, dashboardLibrary, dashboardPromptOptions] of [
+  ['dashboard', 'dsh-openui-dashboard-1', legacyDashboard, legacyPrompt],
+  ['dashboard-v2', 'dsh-openui-dashboard-2', libraryV2, promptOptionsV2],
+]) {
+  const dashboardInstructions=dashboardLibrary.prompt({bindings:true,builtinFunctions:true,toolCalls:true,
+    preamble:dashboardPromptOptions.preamble,
+    examples:dashboardPromptOptions.examples,
+    additionalRules:[
+      ...dashboardPromptOptions.additionalRules,
+      'Query and Mutation call registered DSH tools through the session-scoped server executor. Existing permissions, sandboxing, tool visibility and approvals apply. Unknown tools fail. Query auto-runs on render and argument changes: use it only for intended reads. Mutation runs only through @Run after user interaction: use it for writes. Never put a write operation in Query. Saved views re-fetch Queries when reopened. No tools run in streaming previews. @ToAssistant remains available for agent-directed tasks.',
+      'No arbitrary HTML, scripts, credentials, network endpoints or executable code. Use text and registered components. Keep output within 200000 characters and bounded node/data budgets.',
+      'Render via render_ui({lang: "...OpenUI Lang...", title:"...", library:"'+name+'"}). Do not wrap the DSL in JSON or markdown fences.'
+    ]});
+  fs.writeFileSync(path.join(root,'lib/'+name+'-schema.json'),JSON.stringify(dashboardLibrary.toJSONSchema()));
+  fs.writeFileSync(path.join(root,'lib/'+name+'-instructions.json'),JSON.stringify({libraryVersion:version,components:Object.keys(dashboardLibrary.components),instructions:dashboardInstructions}));
+}
 await build({entryPoints:[path.join(root,'src/dashboard-validate.js')],outfile:path.join(root,'lib/dashboard-validate.js'),bundle:true,platform:'node',format:'esm',plugins:[noRuntimeTelemetry],define:{'process.env.NODE_ENV':'"production"'},external:['@modelcontextprotocol/sdk','@modelcontextprotocol/sdk/*']});
 const result=await build({entryPoints:[path.join(root,'src/client-entry.jsx')],bundle:true,write:false,platform:'browser',format:'cjs',target:['chrome120'],external,jsx:'automatic',define:{'process.env.NODE_ENV':'"production"','process.env.OPENUI_TELEMETRY_DISABLED':'"1"'},plugins:[noRuntimeTelemetry],loader:{'.css':'text','.module.css':'text'},minify:true,metafile:true,legalComments:'eof'});
 if(telemetryPatches<2)throw Error('Runtime telemetry suppression was not applied to both builds');

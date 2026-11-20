@@ -1,6 +1,7 @@
 import React, {useEffect, useId, useMemo, useRef, useState} from 'react';
 import {Renderer} from '@openuidev/react-lang';
-import {ThemeProvider, library} from '@openuidev/dashboard-library';
+import * as legacyDashboard from '@openuidev/dashboard-library-legacy';
+import * as currentDashboard from '@openuidev/dashboard-library';
 import {Skeleton, SkeletonBox, SkulletProvider} from 'skullet/react';
 import {actionRequest} from './action-bridge.js';
 import {useShellTheme} from './use-shell-theme.js';
@@ -24,6 +25,7 @@ export function DashboardView({spec, actionBridge, toolBridge, isStreaming=false
   const storageKey = useMemo(() => hashSpec(spec?.lang), [spec?.lang]);
   const [formState,setFormState] = useState(() => selection?.current ?? (persistFormState && !isStreaming ? readFormState(storageKey) : undefined));
   const mode = useShellTheme();
+  const {ThemeProvider, library} = spec.library === 'dashboard-v2' ? currentDashboard : legacyDashboard;
   const execution = useRef(null);
   useEffect(() => () => {execution.current?.abort();execution.current=null;}, [toolBridge, isStreaming]);
   useEffect(() => { setFormState(selection?.current ?? (persistFormState && !isStreaming ? readFormState(storageKey) : undefined)); }, [storageKey, persistFormState, isStreaming, selection]);
