@@ -1,0 +1,84 @@
+name: Build Render UI release
+on:
+  push:
+    tags: ['render-ui-v*']
+  pull_request:
+    paths: ['packages/update-manager/**', '.github/workflows/render-ui-release.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+      - run: npm test --prefix packages/update-manager
+      - working-directory: packages/render-ui
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          corepack enable pnpm
+          corepack prepare pnpm@12.16.1 --activate
+          pnpm install --frozen-lockfile --ignore-scripts
+          npm run build
+          npm test
+          npm run build:preview
+          node verify-analytics-browser.mjs
+        env:
+          CHROMIUM_PATH: C:\Program Files\Google\Chrome\Application\chrome.exe
+      - name: Package and record checksum
+        working-directory: packages/render-ui
+        shell: pwsh
+        run: |
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "render-ui-v$($pkg.version)") {
+            throw "Tag must equal render-ui-v$($pkg.version)"
+          }
+          $tools = $pkg.peerDependencies.'@deepseek-ai/dsh-tools'
+          $protocol = $pkg.peerDependencies.'@deepseek-ai/dsh-typert-protocol'
+          if ($tools -ne $protocol -or $tools -notmatch '^\d+\.\d+\.\d+(?:-[\w.-]+)?$') {
+            throw 'Release requires matching exact DSH peer versions'
+          }
+          $packed = npm pack --ignore-scripts --json
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $pack = ($packed | ConvertFrom-Json)[0]
+          $published = @($pack.files.path)
+          foreach ($file in @('lib/index.js','lib/client.js','lib/openui-validate.js','lib/dashboard-validate.js','cordis.patch.yml')) {
+            if ($file -notin $published) { throw "Package missing $file" }
+          }
+          New-Item -ItemType Directory -Path release | Out-Null
+          Move-Item -LiteralPath $pack.filename -Destination release/render-ui.tgz
+          [ordered]@{
+            schema = 1
+            package = $pkg.name
+            version = $pkg.version
+            dshVersion = $tools
+            peers = $pkg.peerDependencies
+            sha256 = (Get-FileHash release/render-ui.tgz).Hash.ToLowerInvariant()
+          } | ConvertTo-Json | Set-Content release/render-ui-update.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: render-ui-release
+          path: packages/render-ui/release/
+          if-no-files-found: error
+
+  publish:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: render-ui-release
+          path: release
+      - run: gh release create "$GITHUB_REF_NAME" release/render-ui.tgz release/render-ui-update.json --verify-tag --title "$GITHUB_REF_NAME" --notes "Render UI build, unit tests and Chrome fixture passed before packaging."
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}

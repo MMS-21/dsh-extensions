@@ -1,5 +1,8 @@
 # Extension compatibility and updates
 
+The [Update Manager bundle](packages/update-manager/README.md) shares the
+compatibility checker and can discover and stage verified Render UI releases.
+
 The repository now checks the official Windows DSH nightly feed daily and opens
 one compatibility-review issue for each newly observed version. It uses the
 desktop update feed, because the public npm DSH packages currently report

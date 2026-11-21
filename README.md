@@ -7,6 +7,7 @@ Local version-controlled source for the DSH extensions developed in this workspa
 | Package | Contents |
 | --- | --- |
 | `packages/render-ui` | OpenUI rendering, artifacts, AnalyticsDashboard, StatusBars, source schemas, tests and Desktop installer |
+| `packages/update-manager` | Desktop Extension Updates tab, installed compatibility checks and verified Render UI release staging |
 | `packages/whiteboard` | Whiteboard canvas, workspace/session bridge, agent cursors, compact note prompts, Host tools and tests |
 | `packages/agent-desktop` | Pinned native MCP dependency manifest, protocol/runtime verification and profile setup scripts |
 | `packages/agent-state-light` | Composer agent-status indicator |

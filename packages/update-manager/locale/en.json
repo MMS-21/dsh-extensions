@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Extension Update Manager",
+    "description": "Checks DSH compatibility and stages verified Render UI releases."
+  }
+}
