@@ -1,3 +1,4 @@
+import {isDashboardLibrary} from '../lib/dashboard-dialect.js';
 import {createSelection} from './data-snapshot.js';
 import {fileResourceAddress} from './artifact-resources.js';
 
@@ -74,7 +75,7 @@ export function createLegacyExports(openuiRuntime, require) {
       if (spec.view !== "openui" || typeof spec.lang !== "string") {
         return h("div",{style:T.error,role:"alert"},"This presentation is not an OpenUI Lang view.");
       }
-      const View = spec.library === "dashboard" ? openuiRuntime.DashboardView : openuiRuntime.OpenUiView;
+      const View = isDashboardLibrary(spec.library) ? openuiRuntime.DashboardView : openuiRuntime.OpenUiView;
       return h(UiBoundary,{key:spec.lang},h(View,{spec, actionBridge:props.actionBridge, toolBridge:props.toolBridge, persistFormState:props.persistFormState, selection:props.selection}));
     }
 
@@ -97,7 +98,7 @@ export function createLegacyExports(openuiRuntime, require) {
       const {sessionId, callId, phase} = props;
       const sidebar = ctx && optionalSeat(ctx, 'sidebarRight');
       const failure = props.block?.isError || props.block?.error;
-      const wantsDraft = placement === 'artifact' || (phase === 'start' && placement === undefined && library === 'dashboard');
+      const wantsDraft = placement === 'artifact' || (phase === 'start' && placement === undefined && isDashboardLibrary(library));
       const eligible = Boolean(sidebar && sessionId && callId && wantsDraft && openuiRuntime.updatePresentationDraft);
       useEffect(() => {
         if (phase === 'result' && failure && sessionId && callId) {
@@ -117,7 +118,7 @@ export function createLegacyExports(openuiRuntime, require) {
       if (phase !== "result") {
         if (eligible) return h("div", {style:T.subtitle}, "Preparing sidebar preview…");
         if(lang) {
-          const View = library === 'dashboard' ? openuiRuntime.DashboardView : openuiRuntime.OpenUiView;
+          const View = isDashboardLibrary(library) ? openuiRuntime.DashboardView : openuiRuntime.OpenUiView;
           return h(UiBoundary,null,h(View,{spec:{lang,title:'Generating interactive view',library},isStreaming:true}));
         }
         return h("div",{style:T.skeleton},"Preparing interactive view…");

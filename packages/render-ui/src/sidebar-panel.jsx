@@ -1,3 +1,4 @@
+import {isDashboardLibrary} from '../lib/dashboard-dialect.js';
 import React, {useEffect, useMemo, useState} from 'react';
 import {OpenUiView} from './openui-view.jsx';
 import {DashboardView} from './dashboard-view.jsx';
@@ -112,7 +113,7 @@ export function RenderUiIcon({size = 18}) {
  */
 function artifactKind(spec) {
   if (spec.view === 'mini-app') return 'miniApp';
-  return spec.library === 'dashboard' ? 'dashboard' : 'interactive';
+  return isDashboardLibrary(spec.library) ? 'dashboard' : 'interactive';
 }
 
 function sourceChat(id, titleFor) {
@@ -182,7 +183,7 @@ export function RenderUiPanel({t, sessions, sessionTitleFor, openFile, openChat,
     catch (error) { return {error: error.message}; }
   }, [selected, artifacts]);
   const SelectedView = preview?.spec?.view === 'mini-app' ? MiniAppView
-    : preview?.spec?.library === 'dashboard' ? DashboardView : OpenUiView;
+    : isDashboardLibrary(preview?.spec?.library) ? DashboardView : OpenUiView;
   const selection = useMemo(() => preview?.spec && createSelection(preview.spec, preview.selection), [preview]);
   const entries = [...merged.values()].sort((a, b) => b.savedAt - a.savedAt).map(artifact => ({
     artifact, kind:artifact.kind ?? artifactKind(artifact.spec),

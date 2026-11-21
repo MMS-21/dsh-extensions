@@ -1,3 +1,4 @@
+import {isDashboardLibrary} from '../lib/dashboard-dialect.js';
 /**
  * Right-sidebar presentation tab.
  *
@@ -190,7 +191,7 @@ export function registerSidebarPresentations(ctx, runtime) {
       return <div style={{padding: 20, fontSize: 13, opacity: 0.7}}>{t ? t('missing') : 'This presentation is no longer available.'}</div>;
     }
     if (entry.status) {
-      const View = entry.spec.library === 'dashboard' ? DashboardView : OpenUiView;
+      const View = isDashboardLibrary(entry.spec.library) ? DashboardView : OpenUiView;
       return <SidebarPreviewFrame title={entry.title} contentLabel={contentLabel}>
         {entry.status === 'failed' || running === false ? <p role="status">This draft did not complete. Check the tool result in chat.</p>
           : <>

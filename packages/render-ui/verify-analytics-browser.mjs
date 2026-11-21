@@ -58,6 +58,10 @@ try{
   await page.goto(base+'&stream');
   await page.getByText('Unvalidated streaming preview — actions disabled').waitFor({state:'attached'});
   assert.equal(await page.evaluate(()=>__dshTest.toolCalls.length),0);
+  await page.goto(base.replace('?obsidian', '?dashboard'));
+  await page.getByText('Context used', {exact:true}).waitFor();
+  await page.goto(base.replace('?obsidian', '?dashboard-v2'));
+  await page.getByText('Dashboard v2 fixture', {exact:true}).waitFor();
   assert.deepEqual(errors,[]);assert.deepEqual(remote,[]);
   console.log('PASS: actual bundle dashboard navigation/search/PR answers, appearance, keyboard status bars, draft fallback, stream isolation, themes and responsive bounds; no external requests');
 }catch(error){console.error('Page text:',(await page.locator('body').innerText()).slice(-4000));console.error(errors);throw error;}
