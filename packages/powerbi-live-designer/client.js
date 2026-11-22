@@ -24,6 +24,11 @@ window.__ModuleLoader__.load({
     const TAB_KIND = "powerbi-live-designer";
     const NAMESPACE = "powerbiLiveDesigner";
     const API_BASE = "/api/pbi-live-designer/";
+    const V6_VIEWS = {
+      designer: ['Power BI Live Designer v6', 'powerbi_live_designer_v6_reference.html'],
+      performance: ['Agent Performance v6', 'agent_performance_v6_reference.html'],
+      controls: ['Live report controls'],
+    };
 
     const DICTS = {
       en: {
@@ -309,6 +314,7 @@ window.__ModuleLoader__.load({
         const [directBusy, setDirectBusy] = useState(false);
         const [taskState, setTaskState] = useState(null);
         const [view, setView] = useState("overview");
+        const [surface, setSurface] = useState("designer");
         const [performance, setPerformance] = useState(null);
         const task = taskState?.sessionId === sessionId ? taskState.task : null;
         const project = task?.project ?? "";
@@ -440,8 +446,22 @@ window.__ModuleLoader__.load({
           h('span', {className:'pbi-v6-mark','aria-hidden':true}, '▥'),
           h('strong', {style:css.title}, t('type.label')),
         );
+        const surfaceNav = h('nav', {className:'pbi-v6-nav','aria-label':'Designer views'},
+          ...Object.entries(V6_VIEWS).map(([id,[label]])=>h('button', {
+            key:id,type:'button','aria-current':surface === id ? 'page' : undefined,
+            onClick:()=>setSurface(id),style:{...css.button,borderColor:'transparent'},
+          },label)),
+        );
+        if (surface !== 'controls') {
+          const [title, document] = V6_VIEWS[surface];
+          return h('div', {style:{...css.root,padding:0,gap:0,overflow:'hidden'}},
+            h('style', null, workspaceCss), surfaceNav,
+            h('iframe', {key:document,title,src:API_BASE+'previews/'+document,sandbox:'allow-scripts',
+              style:{display:'block',width:'100%',flex:1,minHeight:0,border:0}}),
+          );
+        }
         const frame = (...children)=>h('div', {className:'pbi-v6',style:css.root},
-          h('style', null, workspaceCss), header, ...children);
+          h('style', null, workspaceCss), surfaceNav, header, ...children);
         if (!project) {
           return frame(h('main', {className:'pbi-v6-content'},
             h('h2', null, 'Start with a saved Power BI project'),

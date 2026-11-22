@@ -154,6 +154,18 @@ async function post(route, body) {
   return { status: response.status, body: await response.json() };
 }
 
+test('both v6 routes serve the original HTML bytes', async () => {
+  const {routes}=setup();
+  for (const name of ['powerbi_live_designer_v6_reference.html','agent_performance_v6_reference.html']) {
+    const route=routes.get('/api/pbi-live-designer/previews/'+name);
+    assert.deepEqual(route.methods,['GET']);
+    const response=route.fetch();
+    assert.match(response.headers.get('content-type'),/^text\/html/);
+    assert.match(response.headers.get('content-security-policy'),/sandbox allow-scripts/);
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()),await readFile(new URL('../previews/'+name,import.meta.url)));
+  }
+});
+
 test('task setup is scoped to the chat and requires a saved PBIP before connecting', async () => {
   const {routes,tools}=setup({},[{id:'session-1'},{id:'session-2'}]);
   const start=tools.get('pbi_start_task');

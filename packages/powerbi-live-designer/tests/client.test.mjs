@@ -71,6 +71,14 @@ test('sidebar shows setup first, then reveals tools for the confirmed project', 
     return all;
   }
   const button=(view,label)=>view.find(node=>node.type==='button'&&node.children.includes(label));
+  const designer=render();
+  const designerFrame=designer.find(node=>node.type==='iframe');
+  assert.match(designerFrame.props.src,/powerbi_live_designer_v6_reference\.html$/);
+  assert.equal(designerFrame.props.sandbox,'allow-scripts');
+  button(designer,'Agent Performance v6').props.onClick();
+  const performance=render();
+  assert.match(performance.find(node=>node.type==='iframe').props.src,/agent_performance_v6_reference\.html$/);
+  button(performance,'Live report controls').props.onClick();
   const setup=render();
   assert.ok(setup.some(node=>node.children.includes('Start with a saved Power BI project')));
   assert.equal(button(setup,'Refresh data'),undefined);

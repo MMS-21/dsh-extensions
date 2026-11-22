@@ -19,6 +19,7 @@
     "locale/*.json",
     "icon.svg",
     "README.md",
+    "previews/*.html",
     "skills.js",
     "skills/**",
     "SKILLS-SOURCE.md",

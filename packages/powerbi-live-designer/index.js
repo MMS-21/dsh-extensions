@@ -35,6 +35,7 @@ const RUN_TIMEOUT_MS = 900000;
 const ARTIFACT_DIR = '.pbi-live-designer';
 const ACTIONS = ['task-status', 'task-performance', 'configure', 'direct-connect', 'direct-refresh', 'status', 'readiness', 'semantic', 'validation', 'journal', 'design-plan', 'design-review', 'plan', 'run', 'capture', 'abort', 'change-stage','change-get','change-pending','change-validate','change-apply','change-reload'];
 const PAGE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
+const V6_DOCUMENTS = ['powerbi_live_designer_v6_reference.html', 'agent_performance_v6_reference.html'];
 
 function readString(value) {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
@@ -508,6 +509,19 @@ export function apply(ctx, config) {
   /** Register the HTTP operations and the agent tools under this plugin's effect. */
   ctx.effect(() => {
     const disposers = [];
+    for (const document of V6_DOCUMENTS) {
+      disposers.push(ctx.connection.fetch.register({
+        path: `/api/pbi-live-designer/previews/${document}`,
+        methods: ['GET'],
+        fetch: () => new Response(readFileSync(new URL(`./previews/${document}`, import.meta.url)), {
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Content-Security-Policy': "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; base-uri 'none'; form-action 'none'",
+            'X-Content-Type-Options': 'nosniff',
+          },
+        }),
+      }));
+    }
     disposers.push(ctx.tools.register({
       name:'pbi_start_task',
       description:'Open Power BI Live Designer at task start. Call with the mode before asking for the saved PBIP path, then again with the same mode and the path provided by the user.',
