@@ -8,7 +8,7 @@
 <title>Power BI Live Designer | Reference edition</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;family=Space+Grotesk:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
 <script>(function(){try{var t=localStorage.getItem('pbi-suite-theme')||localStorage.getItem('pbi-live-designer-theme');if(t==='light')document.documentElement.dataset.theme='light'}catch(e){}})();</script>
 <style>a.nav-item{text-decoration:none}
 /* Power BI Live Designer v3: Unslop design pass
@@ -21,7 +21,7 @@
   --text:#eeefed; --secondary:#b3b4b0; --muted:#8f918d;
   --accent:#f2c811; --good:#66bf96; --warning:#efbb64; --danger:#df8586;
   --radius:12px;
-  font-family:"Manrope", "Cabin", -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-family:"Geist", -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   font-size:14px; background:var(--bg);color:var(--text)
 }
 *{box-sizing:border-box}
@@ -48,10 +48,10 @@ svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.5;stroke-linecap:r
 .nav-item:hover{background:var(--panel);color:var(--text)}
 .nav-item.active{background:var(--panel-raised);color:var(--text);border-color:#38393b;box-shadow:inset 2px 0 var(--accent);font-weight:500}
 .nav-item.active svg{color:var(--secondary)}
-.nav-item .count{margin-left:auto;color:var(--warning);font-size:12px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;min-width:12px;text-align:right}
+.nav-item .count{margin-left:auto;color:var(--warning);font-size:12px;font-family:"Geist Mono",ui-monospace,SFMono-Regular,Consolas,monospace;min-width:12px;text-align:right}
 .sidebar-bottom{margin-top:auto;border-top:1px solid var(--border-soft);padding:20px 8px 0}
 .mini-eyebrow{display:block;color:var(--muted);font-size:12px;font-weight:400;letter-spacing:0;text-transform:none}
-.endpoint{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--secondary);font-size:11px;line-height:1.6;overflow-wrap:anywhere;margin-top:8px}
+.endpoint{font-family:"Geist Mono",ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--secondary);font-size:11px;line-height:1.6;overflow-wrap:anywhere;margin-top:8px}
 .preview-pill{margin-top:16px;display:flex;align-items:center;gap:8px;color:var(--muted);font-size:11px}
 .preview-pill:before{content:"";height:6px;width:6px;border-radius:50%;background:var(--muted)}
 .main{min-width:0}
@@ -122,7 +122,7 @@ svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.5;stroke-linecap:r
 .card-badge{color:var(--muted);background:none;border:0;font-size:11px;font-weight:400;padding:0;line-height:1.5;white-space:nowrap}
 .project-line{background:var(--panel-inset);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:8px}
 .mini-label{font-size:11px;color:var(--muted);display:block;margin-bottom:6px}
-.path{display:flex;align-items:center;justify-content:space-between;gap:8px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;color:var(--text);overflow-wrap:anywhere}
+.path{display:flex;align-items:center;justify-content:space-between;gap:8px;font-family:"Geist Mono",ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;color:var(--text);overflow-wrap:anywhere}
 .detail-table{display:grid;grid-template-columns:1fr 1fr;gap:0;margin-top:4px}
 .detail-item{min-width:0;padding:16px 12px 12px 0;border-bottom:1px solid var(--border-soft);background:transparent;border-radius:0}
 .detail-item:nth-child(even){padding-left:12px}
@@ -134,7 +134,7 @@ svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.5;stroke-linecap:r
 .flow-item{display:flex;gap:16px;position:relative;align-items:flex-start;padding:0 0 20px}
 .flow-item:last-child{padding-bottom:0}
 .flow-item:not(:last-child):before{content:"";position:absolute;left:15px;top:32px;bottom:0;width:1px;background:#424344}
-.flow-num{width:32px;height:32px;flex:none;display:grid;place-items:center;border:1px solid #454647;border-radius:8px;background:var(--panel-raised);color:var(--secondary);font-size:12px;font-weight:500;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.flow-num{width:32px;height:32px;flex:none;display:grid;place-items:center;border:1px solid #454647;border-radius:8px;background:var(--panel-raised);color:var(--secondary);font-size:12px;font-weight:500;font-family:"Geist Mono",ui-monospace,SFMono-Regular,Consolas,monospace}
 .flow-item strong{display:block;margin:1px 0 4px;font-size:13px;font-weight:500;line-height:1.3;color:var(--text)}
 .flow-item p{font-size:12px;line-height:1.5;color:var(--muted);margin:0}
 .flow-item.pending .flow-num{background:var(--accent);border-color:var(--accent);color:#181711}
@@ -162,7 +162,7 @@ svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.5;stroke-linecap:r
 .step-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:hidden;background:var(--panel);border:1px solid var(--border);border-radius:10px;margin-bottom:20px}
 .step{min-width:0;display:flex;align-items:center;gap:10px;padding:12px 16px;color:var(--muted);font-size:12px;border-right:1px solid var(--border-soft)}
 .step:last-child{border-right:0}
-.step b{width:24px;height:24px;display:grid;place-items:center;flex:none;border:1px solid #464748;border-radius:6px;color:var(--secondary);font-size:11px;font-weight:500;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.step b{width:24px;height:24px;display:grid;place-items:center;flex:none;border:1px solid #464748;border-radius:6px;color:var(--secondary);font-size:11px;font-weight:500;font-family:"Geist Mono",ui-monospace,SFMono-Regular,Consolas,monospace}
 .step.current{color:var(--text);background:#292821}
 .step.current b{background:var(--accent);border-color:var(--accent);color:#161615}
 .step.done{color:var(--secondary)}
@@ -175,7 +175,7 @@ svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.5;stroke-linecap:r
 .field:hover{border-color:#595b5d}
 .field:focus{border-color:var(--accent);outline:2px solid rgba(242,200,17,.2);outline-offset:1px}
 .field::placeholder{color:#81837e;opacity:1}
-textarea.field{min-height:112px;resize:vertical;line-height:1.6;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px}
+textarea.field{min-height:112px;resize:vertical;line-height:1.6;font-family:"Geist Mono",ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px}
 select.field{padding-right:30px}
 .checkline{display:flex;gap:12px;align-items:flex-start;font-size:12px;line-height:1.55;color:var(--secondary);padding:10px 0;cursor:pointer}
 .checkline input{accent-color:var(--accent);width:16px;height:16px;flex:none;margin:1px 0 0;cursor:pointer}
@@ -220,7 +220,7 @@ select.field{padding-right:30px}
 .model-table td{padding:14px;border-bottom:1px solid var(--border-soft)}
 .footnote{margin-top:40px;padding:24px 0;border-top:1px solid var(--border-soft);color:var(--muted);font-size:11px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .footnote a{color:var(--secondary);text-decoration:underline;text-underline-offset:2px}
-.code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-variant-numeric:tabular-nums}
+.code{font-family:"Geist Mono",ui-monospace,SFMono-Regular,Consolas,monospace;font-variant-numeric:tabular-nums}
 .spaced{display:flex;justify-content:space-between;gap:12px;align-items:center}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(max-width:1240px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}.stat:nth-child(2){border-right:0}.stat:nth-child(-n+2){border-bottom:1px solid var(--border-soft)}.split,.bottom-grid,.workflow-grid{grid-template-columns:1fr}.feature-panel{min-height:240px}}
@@ -260,7 +260,7 @@ select.field{padding-right:30px}
 /* V4 typography: character at headings, neutrality for dense controls, mono only for identifiers. */
 :root {
   --display-font: "Bricolage Grotesque", "URW Gothic", "Cabin", sans-serif;
-  --ui-font: "Manrope", "Cabin", sans-serif;
+  --ui-font: "Geist", sans-serif;
   --mono-font: "IBM Plex Mono", "Liberation Mono", ui-monospace, monospace;
   font-family: var(--ui-font);
 }
@@ -367,13 +367,13 @@ body, button, input, select, textarea {font-family:var(--ui-font)}
 
 
 /* V6 counterpart of Agent Performance: reference-aligned dark neutrals, purple
-   active state, quiet borders, compact Geist and Space Grotesk typography. */
+   active state, quiet borders, compact Geist typography. */
 :root{
   color-scheme:dark;
   --bg:#0c0c0d;--sidebar:#0d0d0e;--panel:#202021;--panel-raised:#2a292c;--panel-inset:#161618;
   --border:#343438;--border-soft:#2a292d;--text:#f2f2f4;--secondary:#c3c1c8;--muted:#96949e;
   --accent:#9958f3;--good:#87c4a4;--warning:#d7ad74;--danger:#db8d96;--radius:10px;
-  --display-font:"Space Grotesk","Arial",sans-serif;--ui-font:"Geist","Arial",sans-serif;
+  --display-font:"Geist","Arial",sans-serif;--ui-font:"Geist","Arial",sans-serif;
   --mono-font:"Geist Mono","SFMono-Regular",ui-monospace,monospace;
   font-family:var(--ui-font);font-size:12px;background:var(--bg);color:var(--text);
 }
@@ -486,6 +486,7 @@ button:focus-visible {
   outline: 2px solid var(--preview-focus);
   outline-offset: 2px;
 }
+code, pre, kbd, samp { font-family: "Geist Mono", ui-monospace, Consolas, monospace; }
 </style>
 </head>
 <body>
