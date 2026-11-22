@@ -119,9 +119,8 @@ window.__ModuleLoader__.load({
           },8000);
           async function loadPage() {
             try {
-              const response = await fetch(API_BASE+"live/"+document,{signal:controller.signal});
-              const html = await response.text();
-              if (!response.ok || !html.includes("pbi-v6-request")) throw Error("The v6 document could not be loaded.");
+              const {html} = await call("workspace-document", {document});
+              if (typeof html !== "string" || !html.includes("pbi-v6-request")) throw Error("The v6 document could not be loaded.");
               if (active) setLoad({scope,src:"data:text/html;charset=utf-8," + encodeURIComponent(html)});
             } catch (error) {
               clearTimeout(deadline);

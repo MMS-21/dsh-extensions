@@ -33,7 +33,7 @@ const STATUS_TIMEOUT_MS = 30000;
 const ACTION_TIMEOUT_MS = 120000;
 const RUN_TIMEOUT_MS = 900000;
 const ARTIFACT_DIR = '.pbi-live-designer';
-const ACTIONS = ['task-status', 'task-performance', 'configure', 'direct-connect', 'direct-refresh', 'status', 'readiness', 'semantic', 'validation', 'journal', 'design-plan', 'design-review', 'plan', 'run', 'capture', 'abort', 'change-stage','change-get','change-pending','change-validate','change-apply','change-reload'];
+const ACTIONS = ['workspace-document', 'task-status', 'task-performance', 'configure', 'direct-connect', 'direct-refresh', 'status', 'readiness', 'semantic', 'validation', 'journal', 'design-plan', 'design-review', 'plan', 'run', 'capture', 'abort', 'change-stage','change-get','change-pending','change-validate','change-apply','change-reload'];
 const PAGE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
 const V6_DOCUMENTS = ['powerbi_live_designer_v6_reference.html', 'agent_performance_v6_reference.html'];
 
@@ -43,6 +43,19 @@ function readString(value) {
 
 function jsonResponse(value, status = 200) {
   return Response.json(value, { status });
+}
+
+function liveDocument(document) {
+  if (!V6_DOCUMENTS.includes(document)) throw Error('Unknown v6 workspace document.');
+      const preview = readFileSync(new URL(`./previews/${document}`, import.meta.url), 'utf8');
+      const scriptStart = preview.lastIndexOf('<script>');
+      const scriptEnd = preview.indexOf('</script>', scriptStart);
+      const bridge = readFileSync(new URL('./previews/live.js', import.meta.url), 'utf8');
+      if (scriptStart < 0 || scriptEnd < scriptStart) throw Error('The v6 document has no application script.');
+      const policy = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: blob:; base-uri 'none'; form-action 'none'";
+      const page = (preview.slice(0, scriptStart) + '<script>' + bridge.replaceAll('</script','<\\/script') +
+        preview.slice(scriptEnd)).replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="${policy}">`);
+  return page;
 }
 
 function summarizeActivity(entries) {
@@ -363,6 +376,8 @@ export function apply(ctx, config) {
     const sessionId = requireSession(body?.sessionId);
     if(op.startsWith('change-'))return changeCall(sessionId,op.slice(7),body?.value??{});
     switch (op) {
+      case 'workspace-document':
+        return {ok:true, html:liveDocument(body.document)};
       case 'task-status': {
         const task = tasks.get(sessionId);
         if (!task) {
@@ -525,25 +540,7 @@ export function apply(ctx, config) {
           },
         }),
       }));
-      disposers.push(ctx.connection.fetch.register({
-        path: `/api/pbi-live-designer/live/${document}`,
-        methods: ['GET'],
-        fetch: () => {
-          const preview = readFileSync(new URL(`./previews/${document}`, import.meta.url), 'utf8');
-          const scriptStart = preview.lastIndexOf('<script>');
-          const scriptEnd = preview.indexOf('</script>', scriptStart);
-          const bridge = readFileSync(new URL('./previews/live.js', import.meta.url), 'utf8');
-          if (scriptStart < 0 || scriptEnd < scriptStart) throw Error('The v6 document has no application script.');
-          const policy = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: blob:; base-uri 'none'; form-action 'none'";
-          const page = (preview.slice(0, scriptStart) + '<script>' + bridge.replaceAll('</script','<\\/script') +
-            preview.slice(scriptEnd)).replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="${policy}">`);
-          return new Response(page, {headers:{
-            'Content-Type':'text/html; charset=utf-8',
-            'Content-Security-Policy':"sandbox allow-scripts; " + policy,
-            'X-Content-Type-Options':'nosniff',
-          }});
-        },
-      }));
+
     }
     disposers.push(ctx.tools.register({
       name:'pbi_start_task',
