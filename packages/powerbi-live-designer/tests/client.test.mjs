@@ -20,7 +20,7 @@ function fixture({mounted, fetchTask = async () => ({task:null})} = {}) {
       return [state[index],next=>{state[index]=next;}];
     },useEffect:fn=>effects.push(fn),useRef:()=>({current:null})};
   vm.runInNewContext(readFileSync(new URL('../client.js',import.meta.url),'utf8'), {
-    window:{__ModuleLoader__:{load(definition){plugin=definition.factory(()=>react);}}},
+    window:{addEventListener(){},removeEventListener(){},__ModuleLoader__:{load(definition){plugin=definition.factory(()=>react);}}},
     AbortSignal, AbortController,
     fetch:async (_url, request)=>({ok:true,json:()=>fetchTask(JSON.parse(request.body))}),
     setTimeout:fn=>{poll=fn;}, clearTimeout:()=>{},
@@ -63,11 +63,17 @@ test('the right sidebar launcher opens Power BI in the active session', () => {
 });
 
 test('the sidebar offers native review before the v6 document is ready', () => {
-  const {Body}=fixture();
+  const {Body,effects}=fixture({fetchTask:async ()=>{throw Error('Workspace HTML must not call the host API.');}});
   const pane=Body({sessionId:'native-session'});
   const review=pane.children[0];
   assert.equal(review.type,'section');
   assert.ok(review.children.some(child=>child?.type==='button'&&child.children.includes('Review pending changes')));
   assert.equal(pane.children.some(child=>child?.type==='iframe'),false);
+  const stop=effects[0]();
+  const frame=Body({sessionId:'native-session'}).children.find(child=>child?.type==='iframe');
+  assert.equal(frame.props.sandbox,'allow-scripts');
+  assert.match(decodeURIComponent(frame.props.src),/pbi-v6-request/);
+  assert.match(decodeURIComponent(frame.props.src),/Content-Security-Policy/);
+  stop();
   assert.equal(Body({}).type,'p');
 });

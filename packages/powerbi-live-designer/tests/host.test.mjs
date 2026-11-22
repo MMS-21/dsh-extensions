@@ -163,12 +163,7 @@ test('both v6 routes serve the original HTML bytes', async () => {
     assert.match(response.headers.get('content-type'),/^text\/html/);
     assert.match(response.headers.get('content-security-policy'),/sandbox allow-scripts/);
     assert.deepEqual(Buffer.from(await response.arrayBuffer()),await readFile(new URL('../previews/'+name,import.meta.url)));
-    const live=await post(routes.get('/api/pbi-live-designer/workspace-document'),{sessionId:'session-1',document:name});
-    assert.equal(live.status,200);
-    const {html}=live.body;
-    assert.match(html,/pbi-v6-request/);
-    assert.doesNotMatch(html,/const state=\{(?:data:fixture|view:'overview')/);
-    assert.match(html,/http-equiv="Content-Security-Policy"/);
+
   }
 });
 

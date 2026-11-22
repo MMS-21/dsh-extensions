@@ -52,7 +52,8 @@
     }
   },
   "scripts": {
-    "test": "node --test tests/*.test.mjs",
+    "build:v6": "node build-v6.mjs",
+    "test": "node build-v6.mjs --check && node --test tests/*.test.mjs",
     "test:python": "python -B -m unittest discover -s py-service/tests -v"
   },
   "dependencies": {
