@@ -224,6 +224,24 @@ window.__ModuleLoader__.load({
       }
     };
 
+    function progressLabel(entry) {
+      if (!entry) return 'Project path received';
+      const operation = entry.operation.split('/').filter(Boolean).at(-1);
+      const labels = {
+        plan:'Design plan', stage:'File changes', validate:'Validation', approve:'Review',
+        apply:'Apply edits', reload:'Reload definitions', 'direct-refresh':'Data refresh',
+        run:'Run', capture:'Capture', semantic:'Model inspection',
+      };
+      const states = {
+        started:'in progress', dispatch:'in progress', succeeded:'complete', verified:'verified',
+        refreshed:'checking remaining tables', failed:'failed', blocked:'blocked', unknown:'unconfirmed',
+        'verification-incomplete':'verification incomplete', stopped:'stopped',
+      };
+      return labels[operation] && states[entry.outcome]
+        ? `${labels[operation]} · ${states[entry.outcome]}`
+        : 'Project path received';
+    }
+
     function makeBody(t, getCommands) {
       function Body(props) {
         const {sessionId} = props;
@@ -251,6 +269,8 @@ window.__ModuleLoader__.load({
         const review = reviewState?.sessionId === sessionId ? reviewState : null;
         const [directState, setDirectState] = useState(null);
         const [directBusy, setDirectBusy] = useState(false);
+        const [taskState, setTaskState] = useState(null);
+        const task = taskState?.sessionId === sessionId ? taskState.task : null;
         const direct = directState?.sessionId === sessionId ? directState : null;
 
         const call = useCallback(async (op, body, signal) => {
@@ -345,7 +365,24 @@ window.__ModuleLoader__.load({
         }, [call, sessionId]);
 
         useEffect(() => {
-          if (direct?.project) return;
+          if (!sessionId) return;
+          const controller = new AbortController();
+          let timer;
+          async function pollTask() {
+            try {
+              const result = await call("task-status", {}, controller.signal);
+              if (controller.signal.aborted) return;
+              setTaskState({sessionId, task:result.task});
+              if (result.task?.project) setProject(result.task.project);
+            } catch {}
+            if (!controller.signal.aborted) timer = setTimeout(pollTask, 2000);
+          }
+          pollTask();
+          return () => { controller.abort(); clearTimeout(timer); };
+        }, [call, sessionId]);
+
+        useEffect(() => {
+          if (!task?.project || !connectionReady || direct?.project) return;
           const controller = new AbortController();
           let timer;
           async function poll() {
@@ -353,7 +390,7 @@ window.__ModuleLoader__.load({
           }
           poll();
           return () => { controller.abort(); clearTimeout(timer); };
-        }, [refresh, direct?.project, connectionReady]);
+        }, [refresh, direct?.project, connectionReady, task?.project]);
 
         async function run(action) {
           if (busy) return;
@@ -464,9 +501,21 @@ window.__ModuleLoader__.load({
           return h("div", { style: css.root }, h("div", { style: css.empty }, t("noSession")));
         }
 
+        const overview = h('section', {style:css.card, 'aria-label':'Project overview'},
+          h('h4', {style:css.cardTitle}, task?.project ? 'Project overview' : 'Start with a saved Power BI project'),
+          h('p', {style:css.hint}, task?.project ?? (task?.mode === 'existing'
+            ? 'Open your existing .pbip in Power BI Desktop and paste its full path into this chat.'
+            : 'For a new report, open Power BI Desktop, save a Power BI Project (.pbip), and paste its full path into this chat. For an existing report, open its .pbip and paste that path.')),
+          task?.project && h('p', {role:'status'}, progressLabel(task.latest)),
+        );
+        if (task && !task.project) {
+          return h('div', {style:{...css.root,fontFamily:'Geist, system-ui, sans-serif'}},
+            h('h3', {style:css.title}, t('type.label')), overview);
+        }
+
         return h(
           "div",
-          { style: css.root },
+          { style: {...css.root,fontFamily:'Geist, system-ui, sans-serif'} },
           h(
             "div",
             { style: css.header },
@@ -474,6 +523,7 @@ window.__ModuleLoader__.load({
             h("span", { style: { ...css.pill, ...(busy || directBusy ? css.pillBusy : null) } },
               busy || directBusy ? t("working") : direct?.project ? "Connected to Power BI" : t(connectionReady ? "ready" : "disconnected"))
           ),
+          overview,
           h(
             "div",
             { style: css.card },
@@ -707,6 +757,32 @@ window.__ModuleLoader__.load({
         key: TAB_KIND,
         locale: NAMESPACE
       }, Title)), "powerbi-live-designer.title");
+
+      ctx.effect(() => {
+        const opened = new Map();
+        const controller = new AbortController();
+        let timer;
+        async function checkActiveTask() {
+          const sessionId = ctx.sidebarRight.mounted.getSnapshot();
+          try {
+            if (sessionId) {
+              const response = await fetch(API_BASE + 'task-status', {
+                method:'POST', headers:{'content-type':'application/json'},
+                body:JSON.stringify({sessionId}), signal:controller.signal,
+              });
+              const {task} = await response.json();
+              if (!controller.signal.aborted && task && opened.get(sessionId) !== task.startedAt
+                  && ctx.sidebarRight.mounted.getSnapshot() === sessionId) {
+                ctx.sidebarRight.openTabIn(sessionId, TAB_KIND);
+                opened.set(sessionId, task.startedAt);
+              }
+            }
+          } catch {}
+          if (!controller.signal.aborted) timer = setTimeout(checkActiveTask, 2500);
+        }
+        if (ctx.sidebarRight.mounted) timer = setTimeout(checkActiveTask, 0);
+        return () => { controller.abort(); clearTimeout(timer); };
+      }, "powerbi-live-designer.task-launcher");
     }
 
     exports.name = MODULE_ID;

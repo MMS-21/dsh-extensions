@@ -154,6 +154,20 @@ async function post(route, body) {
   return { status: response.status, body: await response.json() };
 }
 
+test('task setup is scoped to the chat and requires a saved PBIP before connecting', async () => {
+  const {routes,tools}=setup({},[{id:'session-1'},{id:'session-2'}]);
+  const start=tools.get('pbi_start_task');
+  const exec={agent:{id:'session-1'}};
+  const task=start.execute({mode:'new'},exec);
+  assert.match(task.instruction,/save a new Power BI Project/);
+  const status=routes.get('/api/pbi-live-designer/task-status');
+  assert.equal((await post(status,{sessionId:'session-1'})).body.task.mode,'new');
+  assert.equal((await post(status,{sessionId:'session-2'})).body.task,null);
+  assert.throws(()=>start.execute({mode:'new',project:'relative.pbip'},exec),/full path/);
+  assert.throws(()=>start.execute({mode:'existing'},exec),/new DSH chat/);
+  await assert.rejects(tools.get('pbi_connect_open_report').execute({project:'C:\\BI\\Demo.pbip'},exec),/confirm the saved/);
+});
+
 const MANIFEST = {
   refreshPolicy: 'smart',
   refreshScope: 'affected',

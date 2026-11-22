@@ -33,7 +33,7 @@ const STATUS_TIMEOUT_MS = 30000;
 const ACTION_TIMEOUT_MS = 120000;
 const RUN_TIMEOUT_MS = 900000;
 const ARTIFACT_DIR = '.pbi-live-designer';
-const ACTIONS = ['configure', 'direct-connect', 'direct-refresh', 'status', 'readiness', 'semantic', 'validation', 'journal', 'design-plan', 'design-review', 'plan', 'run', 'capture', 'abort', 'change-stage','change-get','change-pending','change-validate','change-apply','change-reload'];
+const ACTIONS = ['task-status', 'configure', 'direct-connect', 'direct-refresh', 'status', 'readiness', 'semantic', 'validation', 'journal', 'design-plan', 'design-review', 'plan', 'run', 'capture', 'abort', 'change-stage','change-get','change-pending','change-validate','change-apply','change-reload'];
 const PAGE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
 
 function readString(value) {
@@ -58,6 +58,7 @@ export function apply(ctx, config) {
   /** sessionId -> { serviceUrl, project } */
   const bindings = new Map();
   const directProjects = new Map();
+  const tasks = new Map();
   /** sessionId -> { planId, plan, manifest, createdAt } */
   const pending = new Map();
   /** sessionIds with a coordinator operation in flight */
@@ -142,6 +143,13 @@ export function apply(ctx, config) {
     return binding;
   }
 
+  function requireTaskProject(sessionId, project) {
+    const task = tasks.get(sessionId);
+    if (!task) return;
+    if (!task.project) throw Error('Paste and confirm the saved .pbip path first.');
+    if (!sameProject(task.project, project)) throw Error('Use the confirmed .pbip for this chat.');
+  }
+
   function baseUrl(binding) {
     return binding.serviceUrl.replace(/\/+$/, '');
   }
@@ -153,6 +161,7 @@ export function apply(ctx, config) {
    */
   async function serviceCall(sessionId, { method, path, body, timeoutMs }, candidate) {
     const binding = candidate ?? bindingFor(sessionId);
+    requireTaskProject(sessionId, binding.project);
     const operationId = randomUUID();
     record(path, 'started', operationId, undefined, sessionId);
     const headers = { 'X-PBI-Live-Designer': '1' };
@@ -220,7 +229,7 @@ export function apply(ctx, config) {
     if (running.has(sessionId)) throw new Error('Wait for the current operation before changing connection');
     const binding = {...bindingFor(sessionId)};
     const nextServiceUrl = readString(serviceUrl);
-    const nextProject = readString(project);
+    const nextProject = readString(project) ?? tasks.get(sessionId)?.project;
     if (nextProject?.toLowerCase().endsWith('.pbix')) {
       throw new Error('PBIX is not a PBIP project. Save a separate PBIP copy from Desktop; keep the original PBIX');
     }
@@ -324,6 +333,16 @@ export function apply(ctx, config) {
     const sessionId = requireSession(body?.sessionId);
     if(op.startsWith('change-'))return changeCall(sessionId,op.slice(7),body?.value??{});
     switch (op) {
+      case 'task-status': {
+        const task = tasks.get(sessionId);
+        if (!task) return {ok:true, task:null};
+        const project = task.project ?? null;
+        const entries = hostEntries(sessionId).filter(entry =>
+          entry.at >= task.startedAt && !/\/(status|readiness|journal|pending)$/.test(entry.operation));
+        return {ok:true, task:{...task, project, latest:entries.at(-1) ?? null},
+          activity:{completed:entries.filter(entry => ['succeeded','verified'].includes(entry.outcome)).length,
+            blocked:entries.filter(entry => ['blocked','failed','unknown'].includes(entry.outcome)).length}};
+      }
       case 'direct-connect':
         return connectDirect(sessionId, body.project);
       case 'direct-refresh':
@@ -376,6 +395,7 @@ export function apply(ctx, config) {
   }
 
   async function connectDirect(sessionId, project) {
+    requireTaskProject(sessionId, project);
     if (typeof project !== 'string' || !win32.isAbsolute(project) || !project.toLowerCase().endsWith('.pbip')
         || !statSync(project, {throwIfNoEntry:false})?.isFile()) {
       throw Error('Choose the full path of the .pbip project open in Power BI Desktop.');
@@ -388,6 +408,7 @@ export function apply(ctx, config) {
   async function refreshDirect(sessionId, tables, expectedProject, signal) {
     validateRefreshTables(tables);
     const project = directProjects.get(sessionId);
+    requireTaskProject(sessionId, project);
     if (!project || (expectedProject && !sameProject(project, expectedProject))) {
       throw Error('Connect to this open Power BI project in the current chat before refreshing.');
     }
@@ -457,6 +478,32 @@ export function apply(ctx, config) {
   /** Register the HTTP operations and the agent tools under this plugin's effect. */
   ctx.effect(() => {
     const disposers = [];
+    disposers.push(ctx.tools.register({
+      name:'pbi_start_task',
+      description:'Open Power BI Live Designer at task start. Call with the mode before asking for the saved PBIP path, then again with the same mode and the path provided by the user.',
+      parameters:{type:'object',additionalProperties:false,required:['mode'],properties:{
+        mode:{enum:['new','existing']},project:{type:'string'},
+      }},
+      output:toolOutput,
+      execute(args, exec) {
+        const sessionId = toolSession(exec);
+        const task = tasks.get(sessionId);
+        const project = args.project?.trim();
+        if (project && (!win32.isAbsolute(project) || !project.toLowerCase().endsWith('.pbip')
+            || !statSync(project, {throwIfNoEntry:false})?.isFile())) {
+          throw Error('Paste the full path of a saved .pbip file.');
+        }
+        if (task && (task.mode !== args.mode || (task.project && project && !sameProject(task.project, project)))) {
+          throw Error('Open a new DSH chat to start a task for a different Power BI project.');
+        }
+        const next = task ?? {mode:args.mode, startedAt:new Date().toISOString()};
+        if (project) next.project = project;
+        tasks.set(sessionId, next);
+        return {ok:true, ...next, instruction:next.project ? 'Continue with this confirmed project.' :
+          args.mode === 'new' ? 'Open Power BI Desktop, save a new Power BI Project (.pbip), and paste its full path here.' :
+          'Open your existing .pbip in Power BI Desktop and paste its full path here.'};
+      },
+    }));
     disposers.push(ctx.tools.register({
       name:'pbi_connect_open_report',
       description:'Connect directly to the exact open Power BI Desktop .pbip project and list its model tables.',

@@ -3,28 +3,46 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 
-function fixture() {
+function fixture({mounted, fetchTask = async () => ({task:null})} = {}) {
   let plugin;
   let Body;
   let tab;
   let shortcut;
   let opened;
+  let poll;
   const react = {createElement:(type,props,...children)=>({type,props:props??{},children}),
     useState:value=>[value,()=>{}],useEffect:()=>{},useCallback:fn=>fn};
   vm.runInNewContext(readFileSync(new URL('../client.js',import.meta.url),'utf8'), {
     window:{__ModuleLoader__:{load(definition){plugin=definition.factory(()=>react);}}},
-    AbortSignal, setTimeout, clearTimeout,
+    AbortSignal, AbortController,
+    fetch:async (_url, request)=>({json:()=>fetchTask(JSON.parse(request.body))}),
+    setTimeout:fn=>{poll=fn;}, clearTimeout:()=>{},
   });
   plugin.apply({locale:{bind:()=>key=>key,register:()=>()=>{}},
     effect:fn=>fn(),sidebarRightTabs:{register:value=>{tab=value;return()=>{};}},
     shortcuts:{register:value=>{shortcut=value;return()=>{};}},
-    sidebarRight:{commandTarget:element=>element,openTabFromTarget:(kind,target)=>{
+    sidebarRight:{mounted:mounted && {getSnapshot:mounted},openTabIn:(sessionId,kind)=>{
+      assert.equal(kind,tab.kind);
+      opened={sessionId,kind};
+    },commandTarget:element=>element,openTabFromTarget:(kind,target)=>{
       assert.equal(kind,tab.kind);
       opened={kind,target};
     }},
     slots:{inject:(_name,fn)=>fn(),register:(options,component)=>{if(options.name==='sidebar.right.pane.tab')Body=component;return()=>{};}}});
-  return {Body, tab, shortcut, getOpened:()=>opened};
+  return {Body, tab, shortcut, getOpened:()=>opened, poll:()=>poll()};
 }
+
+test('a task opens the designer only for the chat still on screen', async () => {
+  let active='session-1';
+  const {tab,getOpened,poll}=fixture({mounted:()=>active,fetchTask:async ({sessionId})=>{
+    if (sessionId==='session-1') active='session-2';
+    return {task:{startedAt:'task-start'}};
+  }});
+  await poll();
+  assert.equal(getOpened(),undefined);
+  await poll();
+  assert.deepEqual(getOpened(),{sessionId:'session-2',kind:tab.kind});
+});
 
 test('the right sidebar launcher opens Power BI in the active session', () => {
   const {tab, shortcut, getOpened}=fixture();
