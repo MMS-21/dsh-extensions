@@ -223,7 +223,7 @@ window.__ModuleLoader__.load({
       }
     };
 
-    function makeBody(t, commands) {
+    function makeBody(t, getCommands) {
       function Body(props) {
         const session = props.useSession?.();
         const sessionId = props.sessionId ?? session?.id;
@@ -309,7 +309,7 @@ window.__ModuleLoader__.load({
           if (reviewBusy || !change?.changedFiles?.length || !change.reviewDiff) return;
           setReviewBusy(true);
           try {
-            const response = await commands?.execute(sessionId, `/pbi approve ${change.id} ${change.digest}`, []);
+            const response = await getCommands()?.execute(sessionId, `/pbi approve ${change.id} ${change.digest}`, []);
             if (!response) throw Error('DSH approval is unavailable. Reopen DSH and review the changes again.');
             const result = response.value?.result;
             if (!response.ok || result?.kind !== 'success') {
@@ -674,7 +674,7 @@ window.__ModuleLoader__.load({
         kind: "powerbi-live-designer",
         title: () => t("type.label"),
         guide: [{
-          id: "open",
+          id: TYPE_ID,
           commandId: "powerbi-live-designer.open",
           order: 30,
           title: () => t("guide.title"),
@@ -700,7 +700,7 @@ window.__ModuleLoader__.load({
         name: "sidebar.right.pane.tab",
         key: TYPE_ID,
         locale: NAMESPACE
-      }, makeBody(t, ctx.remote?.commands))), "powerbi-live-designer.body");
+      }, makeBody(t, () => ctx.get("remote.commands") ?? ctx.get("remote")?.commands))), "powerbi-live-designer.body");
 
       ctx.effect(() => ctx.slots.inject("sidebar.right.pane.tab.title", () => ctx.slots.register({
         name: "sidebar.right.pane.tab.title",
@@ -710,7 +710,7 @@ window.__ModuleLoader__.load({
     }
 
     exports.name = TYPE_ID;
-    exports.inject = ["slots", "locale", "sidebarRightTabs", "sidebarRight", "shortcuts", "remote.commands"];
+    exports.inject = ["slots", "locale", "sidebarRightTabs", "sidebarRight", "shortcuts"];
     exports.apply = apply;
 
     return module.exports;
