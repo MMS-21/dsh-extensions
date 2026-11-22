@@ -9,7 +9,9 @@ Use the user's dashboard design skills as the design baseline. This workflow coo
 
 ## Understand and inspect
 
-Ask who the report serves and which decisions it should support, unless already known. Inspect available semantic metadata before asking questions that inspection can answer. For Power BI, first read [the adapter reference](references/powerbi.md) and verify the exact project. Complete this stage with a brief distinguishing model facts, user-confirmed definitions, proposed business concepts, and unanswered questions. Business metric meanings, grain, thresholds, and relationship ambiguity require confirmation; reversible layout choices can use the design defaults. A proposed ontology is a labeled suggestion, never an inferred fact or automatic model edit.
+For Power BI, first establish the target with the user. If they have not already named it explicitly, ask “Which Power BI report should I connect to, or should I create a new one?” Wait for the answer before calling Power BI tools. A dataset path alone does not identify a report. Use [the adapter reference](references/powerbi.md) to choose the connection route. For a data-only refresh, follow that route directly and skip design work.
+
+For a design task, ask who the report serves and which decisions it should support, unless already known. Inspect available semantic metadata before asking questions that inspection can answer. Complete this stage with a brief distinguishing model facts, user-confirmed definitions, proposed business concepts, and unanswered questions. Business metric meanings, grain, thresholds, and relationship ambiguity require confirmation; reversible layout choices can use the design defaults. A proposed ontology is a labeled suggestion, never an inferred fact or automatic model edit.
 
 ## Design and feedback
 
