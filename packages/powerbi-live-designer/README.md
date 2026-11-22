@@ -18,8 +18,8 @@ It has no token, cost, or global agent activity source.
 
 ### Refresh an existing report
 
-Open the exact `.pbip` in Power BI Desktop and enter its path in the DSH
-sidebar. In **Refresh data**, choose **Connect to open report**, select the
+Open the exact `.pbip` in Power BI Desktop and paste its path into the DSH
+chat. In **Refresh data**, choose **Connect to open report**, select the
 tables, and click **Refresh selected tables**. The agent can use
 `pbi_connect_open_report` and `pbi_refresh_data` for the same workflow when
 explicitly asked to refresh data. The plugin starts the bundled Microsoft

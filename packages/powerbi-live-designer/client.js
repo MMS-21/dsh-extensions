@@ -23,7 +23,6 @@ window.__ModuleLoader__.load({
     const MODULE_ID = "@local/dsh-plugin-powerbi-live-designer";
     const TAB_KIND = "powerbi-live-designer";
     const NAMESPACE = "powerbiLiveDesigner";
-    const DEFAULT_SERVICE_URL = "http://127.0.0.1:8765";
     const API_BASE = "/api/pbi-live-designer/";
 
     const DICTS = {
@@ -248,20 +247,8 @@ window.__ModuleLoader__.load({
         const [busy, setBusy] = useState(false);
         const [state, setState] = useState(null);
         const [message, setMessage] = useState("");
-        const [project, setProject] = useState("");
-        const [serviceUrl, setServiceUrl] = useState("");
-        const [planId, setPlanId] = useState(null);
-        const [planText, setPlanText] = useState("");
-        const [kind, setKind] = useState("source_data");
-        const [tables, setTables] = useState("");
-        const [lineage, setLineage] = useState(false);
-        const [tmdlValidated, setTmdlValidated] = useState(false);
-        const [dax, setDax] = useState("");
-        const [pages, setPages] = useState("");
         const [pageId, setPageId] = useState("");
         const [shotFailed, setShotFailed] = useState(false);
-        const [connectionChecks, setConnectionChecks] = useState(null);
-        const [connectionReady, setConnectionReady] = useState(false);
         const [inspection, setInspection] = useState(null);
         const [journal, setJournal] = useState(null);
         const [reviewState, setReviewState] = useState(null);
@@ -272,6 +259,7 @@ window.__ModuleLoader__.load({
         const [taskState, setTaskState] = useState(null);
         const [view, setView] = useState("overview");
         const task = taskState?.sessionId === sessionId ? taskState.task : null;
+        const project = task?.project ?? "";
         const direct = directState?.sessionId === sessionId ? directState : null;
 
         const call = useCallback(async (op, body, signal) => {
@@ -344,27 +332,6 @@ window.__ModuleLoader__.load({
           }
         }
 
-        const refresh = useCallback(async (signal) => {
-          if (typeof sessionId !== "string" || sessionId === "") return;
-          try {
-            const result = await call("status", {}, signal instanceof AbortSignal ? signal : undefined);
-            if (signal?.aborted) return;
-            setState(result.state ?? null);
-            if (typeof result.project === "string" && result.project !== "") setProject(previous => previous || result.project);
-            if (typeof result.serviceUrl === "string" && result.serviceUrl !== "") setServiceUrl(previous => previous || result.serviceUrl);
-            setConnectionChecks(result.readiness?.checks ?? null);
-            setConnectionReady(result.readiness?.ready === true);
-            setMessage(result.state?.lastResult ?? "");
-            setShotFailed(false);
-          } catch (error) {
-            if (signal?.aborted) return;
-            setConnectionReady(false);
-            setMessage(String(error.message || error));
-            return false;
-          }
-          return true;
-        }, [call, sessionId]);
-
         useEffect(() => {
           if (!sessionId) return;
           const controller = new AbortController();
@@ -374,24 +341,12 @@ window.__ModuleLoader__.load({
               const result = await call("task-status", {}, controller.signal);
               if (controller.signal.aborted) return;
               setTaskState({sessionId, task:result.task});
-              if (result.task?.project) setProject(result.task.project);
             } catch {}
             if (!controller.signal.aborted) timer = setTimeout(pollTask, 2000);
           }
           pollTask();
           return () => { controller.abort(); clearTimeout(timer); };
         }, [call, sessionId]);
-
-        useEffect(() => {
-          if (!task?.project || !connectionReady || direct?.project) return;
-          const controller = new AbortController();
-          let timer;
-          async function poll() {
-            if (await refresh(controller.signal) && !controller.signal.aborted) timer = setTimeout(poll, 5000);
-          }
-          poll();
-          return () => { controller.abort(); clearTimeout(timer); };
-        }, [refresh, direct?.project, connectionReady, task?.project]);
 
         async function run(action) {
           if (busy) return;
@@ -403,19 +358,6 @@ window.__ModuleLoader__.load({
           } finally {
             setBusy(false);
           }
-        }
-
-        function connect() {
-          return run(async () => {
-            setConnectionReady(false);
-            const result = await call("configure", { serviceUrl, project });
-            setState(result.state ?? null);
-            setConnectionChecks(result.readiness?.checks ?? null);
-            setConnectionReady(result.ready === true);
-            setMessage(result.ready ? t("connected") : result.readiness?.reason ?? t("notConnected"));
-            setPlanId(null);
-            setShotFailed(false);
-          });
         }
 
         function inspect() {
@@ -434,66 +376,6 @@ window.__ModuleLoader__.load({
           });
         }
 
-        function abort() {
-          return run(async () => {
-            const result = await call("abort", {});
-            setPlanId(null);
-            setPlanText(JSON.stringify(result, null, 2));
-          });
-        }
-
-        function manifest() {
-          const change = { kind };
-          if (kind === "source_data" || kind === "m_expression") {
-            change.tables = tables.split(",").map((value) => value.trim()).filter(Boolean);
-            change.storage = "Import";
-            change.lineageVerified = lineage;
-          }
-          if (kind === "measure") change.fileEdit = true;
-          const manifest = {
-            refreshPolicy: "smart",
-            refreshScope: "affected",
-            verifyDax: true,
-            verifyScreenshots: true,
-            changes: [change],
-            daxQueries: dax.trim() === "" ? [] : [dax.trim()],
-            screenshotPages: pages.split(",").map((value) => value.trim()).filter(Boolean)
-          };
-          if (tmdlValidated) manifest.tmdlValidated = true;
-          return manifest;
-        }
-
-        function buildPlan() {
-          return run(async () => {
-            setPlanId(null);
-            try {
-              const result = await call("plan", { manifest: manifest() });
-              setPlanId(result.planId);
-              setPlanText(JSON.stringify({ planId: result.planId, plan: result.plan }, null, 2));
-              setState(result.state ?? null);
-            } catch (error) {
-              setPlanText("BLOCKED: " + String(error.message || error));
-            }
-          });
-        }
-
-        function runPlan() {
-          if (planId === null) return;
-          if (!window.confirm(t("confirmRun"))) return;
-          return run(async () => {
-            try {
-              const result = await call("run", { planId, approved: true });
-              setPlanId(null);
-              setPlanText(String(result.message ?? ""));
-              setState(result.state ?? null);
-              setShotFailed(false);
-            } catch (error) {
-              setPlanText("BLOCKED/FAILED: " + String(error.message || error));
-            }
-          });
-        }
-
-        const phase = state?.refreshPhase ?? "idle";
         const shotUrl = state?.hasImage && typeof sessionId === "string" && sessionId !== "" && !shotFailed
           ? API_BASE + "artifact?sessionId=" + encodeURIComponent(sessionId) + "&v=" + (state?.captureVersion ?? 0)
           : null;
@@ -509,20 +391,20 @@ window.__ModuleLoader__.load({
             : 'For a new report, open Power BI Desktop, save a Power BI Project (.pbip), and paste its full path into this chat. For an existing report, open its .pbip and paste that path.')),
           task?.project && h('p', {role:'status'}, progressLabel(task.latest)),
         );
-        if (task && !task.project) {
-          return h('div', {style:{...css.root,fontFamily:'Geist, system-ui, sans-serif'}},
+        if (!project) {
+          return h('div', {style:{...css.root,padding:16,fontFamily:'Geist, system-ui, sans-serif'}},
             h('h3', {style:css.title}, t('type.label')), overview);
         }
 
         return h(
           "div",
-          { style: {...css.root,fontFamily:'Geist, system-ui, sans-serif'} },
+          { style: {...css.root,padding:16,fontFamily:'Geist, system-ui, sans-serif'} },
           h(
             "div",
             { style: css.header },
             h("h3", { style: css.title }, t("type.label")),
             h("span", { style: { ...css.pill, ...(busy || directBusy ? css.pillBusy : null) } },
-              busy || directBusy ? t("working") : direct?.project ? "Connected to Power BI" : t(connectionReady ? "ready" : "disconnected"))
+              busy || directBusy ? t("working") : direct?.project ? "Connected to Power BI" : "Project selected")
           ),
           h("style", null, `.pbi-designer-nav button:focus-visible {
             outline: 2px solid var(--dsw-alias-label-primary, currentColor);
@@ -541,44 +423,9 @@ window.__ModuleLoader__.load({
           ),
           overview,
           message && h('p', {role:'status',style:css.meta}, message),
-          view === 'overview' && h(
-            "div",
-            { style: css.card },
-            h("div", { style: css.row },
-              h("div", { style: { flex: "1 1 220px" } },
-                h("label", { style: css.label }, t("project.label"),
-                h("input", {
-                  style: css.input, value: project, placeholder: "C:\\BI\\Sales\\Sales.pbip",
-                  readOnly: Boolean(task?.project),
-                  onChange: (event) => setProject(event.target.value)
-                }))
-              ),
-              h("div", { style: { flex: "1 1 160px" } },
-                h("label", { style: css.label }, t("service.label")),
-                h("input", {
-                  style: css.input, value: serviceUrl, placeholder: DEFAULT_SERVICE_URL,
-                  onChange: (event) => setServiceUrl(event.target.value)
-                })
-              ),
-              h("div", { style: { flex: "0 0 auto", alignSelf: "flex-end" } },
-                h("button", {
-                  type: "button", style: { ...css.button, ...css.primary },
-                  disabled: busy, onClick: connect
-                }, t("connect"))
-              )
-            ),
-            h("div", { style: { ...css.meta, marginTop: 8 } },
-              t("phase") + ": " + String(phase) +
-              "  ·  " + t("lastAction") + ": " + String(state?.lastAction ?? "none") +
-              "  ·  " + t("adapter") + ": " + (state?.modelAdapterConfigured ? t("configured") : t("notConfigured"))
-            ),
-            connectionChecks ? h('div', {style:css.meta}, t('connectionChecks') + ': ' +
-              Object.entries(connectionChecks).map(([key,value]) => t(key) + ': ' + String(value ?? 'unknown')).join(' · ')) : null,
-            h("button", {type:"button",style:css.button,disabled:busy,onClick:abort}, t("abort"))
-          ),
           view === 'refresh' && h('section', {style:css.card, 'aria-label':'Refresh Power BI data'},
             h('h4', {style:css.cardTitle}, 'Refresh data'),
-            h('p', {style:css.hint}, 'Use the project confirmed in chat or enter its .pbip path in Overview. Then select the tables to refresh.'),
+            h('p', {style:css.hint}, 'Connect to the confirmed project in Power BI Desktop, then select the tables to refresh.'),
             h('button', {type:'button', style:css.button, disabled:directBusy || !sessionId || !project.trim(), onClick:connectOpenReport},
               'Connect to open report'),
             direct?.project && h('div', null,
@@ -670,54 +517,6 @@ window.__ModuleLoader__.load({
                   alt: t("type.label"),
                   onError: () => setShotFailed(true)
                 }))
-          ),
-          view === 'refresh' && h(
-            "details",
-            { style: css.card },
-            h("summary", { style: css.cardTitle }, t("plan.title")),
-            h("p", { style: css.hint }, t("plan.policy")),
-            h("div", { style: { marginTop: 8 } },
-              h("label", { style: css.label }, t("changeKind")),
-              h("select", { style: css.select, value: kind, onChange: (event) => setKind(event.target.value) },
-                h("option", { value: "source_data" }, t("kind.source_data")),
-                h("option", { value: "m_expression" }, t("kind.m_expression")),
-                h("option", { value: "measure" }, t("kind.measure")),
-                h("option", { value: "pbir" }, t("kind.pbir"))
-              )
-            ),
-            kind === "source_data" || kind === "m_expression"
-              ? h("div", { style: { marginTop: 8 } },
-                  h("label", { style: css.label }, t("tables")),
-                  h("input", { style: css.input, value: tables, placeholder: "FactSales, Budget", onChange: (event) => setTables(event.target.value) })
-                )
-              : null,
-            h("label", { style: { ...css.check, marginTop: 8 } },
-              h("input", { type: "checkbox", checked: lineage, disabled: !(kind === "source_data" || kind === "m_expression"), onChange: (event) => setLineage(event.target.checked) }),
-              " " + t("lineage")
-            ),
-            h("label", { style: css.check },
-              h("input", { type: "checkbox", checked: tmdlValidated, onChange: (event) => setTmdlValidated(event.target.checked) }),
-              " " + t("tmdlValidated")
-            ),
-            h("div", { style: { marginTop: 8 } },
-              h("label", { style: css.label }, t("dax")),
-              h("textarea", { style: css.textarea, value: dax, placeholder: 'EVALUATE ROW("SalesRows", COUNTROWS(\'FactSales\'))', onChange: (event) => setDax(event.target.value) })
-            ),
-            h("div", { style: { marginTop: 8 } },
-              h("label", { style: css.label }, t("pages")),
-              h("input", { style: css.input, value: pages, placeholder: "ReportSectionabc123", onChange: (event) => setPages(event.target.value) })
-            ),
-            h("div", { style: { ...css.row, marginTop: 10 } },
-              h("button", { type: "button", style: css.button, disabled: busy, onClick: buildPlan }, t("buildPlan")),
-              h("button", {
-                type: "button",
-                style: { ...css.button, ...css.warn, ...(planId === null || busy ? { opacity: 0.5, cursor: "not-allowed" } : null) },
-                disabled: planId === null || busy || state?.modelWritesEnabled !== true,
-                onClick: runPlan
-              }, t("runPlan"))
-            ),
-            h("p", { style: css.hint }, t("plan.hint")),
-            planText === "" ? null : h("pre", { style: css.plan }, planText)
           )
         );
       }

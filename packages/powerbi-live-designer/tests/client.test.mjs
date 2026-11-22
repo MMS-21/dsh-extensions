@@ -12,16 +12,17 @@ function fixture({mounted, fetchTask = async () => ({task:null})} = {}) {
   let poll;
   let cursor = 0;
   const state = [];
+  const effects = [];
   const react = {createElement:(type,props,...children)=>({type,props:props??{},children}),
     useState(value){
       const index=cursor++;
       if (!(index in state)) state[index]=value;
       return [state[index],next=>{state[index]=next;}];
-    },useEffect:()=>{},useCallback:fn=>fn};
+    },useEffect:fn=>effects.push(fn),useCallback:fn=>fn};
   vm.runInNewContext(readFileSync(new URL('../client.js',import.meta.url),'utf8'), {
     window:{__ModuleLoader__:{load(definition){plugin=definition.factory(()=>react);}}},
     AbortSignal, AbortController,
-    fetch:async (_url, request)=>({json:()=>fetchTask(JSON.parse(request.body))}),
+    fetch:async (_url, request)=>({ok:true,json:()=>fetchTask(JSON.parse(request.body))}),
     setTimeout:fn=>{poll=fn;}, clearTimeout:()=>{},
   });
   plugin.apply({locale:{bind:()=>key=>key,register:()=>()=>{}},
@@ -35,7 +36,7 @@ function fixture({mounted, fetchTask = async () => ({task:null})} = {}) {
       opened={kind,target};
     }},
     slots:{inject:(_name,fn)=>fn(),register:(options,component)=>{if(options.name==='sidebar.right.pane.tab')Body=component;return()=>{};}}});
-  return {Body:props=>{cursor=0;return Body(props);}, tab, shortcut, getOpened:()=>opened, poll:()=>poll()};
+  return {Body:props=>{cursor=0;return Body(props);}, effects, tab, shortcut, getOpened:()=>opened, poll:()=>poll()};
 }
 
 test('a task opens the designer only for the chat still on screen', async () => {
@@ -61,8 +62,8 @@ test('the right sidebar launcher opens Power BI in the active session', () => {
   assert.deepEqual(getOpened(),{kind:tab.kind,target});
 });
 
-test('sidebar renders using the session ID supplied by the pane', () => {
-  const {Body}=fixture();
+test('sidebar shows setup first, then reveals tools for the confirmed project', async () => {
+  const {Body,effects}=fixture({fetchTask:async ()=>({task:{project:'C:\\BI\\Sales.pbip'}})});
   function render() {
     const all=[];
     function walk(node){if(!node||typeof node!=='object')return;all.push(node);for(const child of node.children??[])Array.isArray(child)?child.forEach(walk):walk(child);}
@@ -70,18 +71,26 @@ test('sidebar renders using the session ID supplied by the pane', () => {
     return all;
   }
   const button=(view,label)=>view.find(node=>node.type==='button'&&node.children.includes(label));
+  const setup=render();
+  assert.ok(setup.some(node=>node.children.includes('Start with a saved Power BI project')));
+  assert.equal(button(setup,'Refresh data'),undefined);
+  assert.equal(setup.some(node=>node.type==='input'),false);
+  const stop=effects[0]();
+  await new Promise(resolve=>setImmediate(resolve));
   const overview=render();
   assert.equal(button(overview,'Overview').props['aria-current'],'page');
-  assert.ok(overview.some(node=>node.children.includes('disconnected')));
+  assert.ok(overview.some(node=>node.children.includes('C:\\BI\\Sales.pbip')));
+  assert.equal(overview.some(node=>node.type==='input'),false);
   button(overview,'Refresh data').props.onClick();
   const refresh=render();
   assert.equal(button(refresh,'Refresh data').props['aria-current'],'page');
-  const runButton=button(refresh,'runPlan');
-  assert.equal(runButton.props.disabled,true);
+  assert.ok(button(refresh,'Connect to open report'));
+  assert.equal(button(refresh,'runPlan'),undefined);
   button(refresh,'Change review').props.onClick();
   const review=render();
   assert.ok(button(review,'Review pending changes'));
   assert.equal(button(review,'Refresh selected tables'),undefined);
   button(review,'Semantic model').props.onClick();
   assert.ok(button(render(),'inspect'));
+  stop();
 });
