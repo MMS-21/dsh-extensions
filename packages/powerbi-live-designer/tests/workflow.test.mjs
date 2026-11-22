@@ -44,3 +44,24 @@ test('lost task authorization acknowledgment reconciles without another dispatch
  await assert.rejects(f.engine.execute('one'),/ack lost/);
  await f.engine.execute('one');assert.equal(count,1);assert.equal(f.calls.filter(x=>x==='apply').length,1);
 });
+
+test('file-based draft snapshots before staging and retains recovery receipt without file bodies',async t=>{
+ const f=fixture(t);await f.engine.prepare('one',f.input);
+ const {loadDraftInput}=await import('../draft-input.mjs');
+ const source=join(f.store.directory,'generated.json'),manifest=join(f.store.directory,'draft.json');writeFileSync(source,'{"title":"Original"}');
+ writeFileSync(manifest,JSON.stringify({...f.draft,changes:{summary:'Snapshot',files:[{path:'Any.Report/page.json',contentPath:'generated.json',beforeSha256:null}]}}));
+ f.adapter.loadDraft=(_task,input)=>loadDraftInput(input,{workspace:f.store.directory});
+ const plan=f.adapter.plan;f.adapter.plan=async input=>{writeFileSync(source,'{"title":"Changed after reading"}');return plan(input);};
+ let staged;const stage=f.adapter.stage;f.adapter.stage=async input=>{staged=input;return stage(input);};
+ const result=await f.engine.draft('one',{manifestPath:manifest});
+ assert.equal(staged.files[0].content,'{"title":"Original"}');assert.equal(result.task.draftSource.fileCount,1);
+ assert.equal(JSON.stringify(result).includes('Original'),false);assert.equal(result.task.phase,'ready_to_execute');
+ const prior=f.store.read('one');writeFileSync(manifest,'bad json');
+ await assert.rejects(f.engine.draft('one',{manifestPath:manifest,revisionOf:f.change.digest}),/valid JSON/);
+ assert.deepEqual(f.store.read('one'),prior,'Invalid disk input cannot discard the previous draft or history');
+});
+
+test('failed staged validation never reports ready to execute',async t=>{
+ const f=fixture(t);await f.engine.prepare('one',f.input);f.adapter.validate=async()=>({status:'staged',validation:{passed:false}});
+ await assert.rejects(f.engine.draft('one',f.draft),/completion check/);assert.equal(f.engine.status('one').task.phase,'verification_failed');
+});

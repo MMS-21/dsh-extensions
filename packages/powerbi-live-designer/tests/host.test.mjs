@@ -23,7 +23,7 @@ const PNG_1PX = Buffer.from(
   'base64'
 );
 
-async function startCoordinator() {
+async function startCoordinator({drafts=false}={}) {
   const calls = [];
   const server = createServer((req, res) => {
     let body = '';
@@ -55,8 +55,10 @@ async function startCoordinator() {
         if(req.headers.authorization!=='Bearer '+'a'.repeat(64)){res.statusCode=403;res.end('{"ok":false}');return;}
         res.end('{"ok":true,"status":"approved"}');return;
       }
+      if(drafts && req.method==='POST' && req.url==='/api/design/plan'){res.end(JSON.stringify({ok:true,planId:'a'.repeat(32)}));return;}
+      if(drafts && req.method==='POST' && req.url==='/api/changes/validate'){res.end(JSON.stringify({ok:true,status:'validated',validation:{passed:true}}));return;}
       if(req.method==='POST' && ['/api/changes/stage','/api/changes/processing-stage'].includes(req.url)) {
-        res.end(JSON.stringify({ok:true,status:req.url.endsWith('processing-stage')?'ready':'staged'}));return;
+        res.end(JSON.stringify({ok:true,...(drafts?{id:'b'.repeat(32),digest:'c'.repeat(64)}:{}),status:req.url.endsWith('processing-stage')?'ready':'staged'}));return;
       }
       if (req.method === 'POST' && req.url === '/api/refresh/plan') {
         const manifest = JSON.parse(body || '{}');
@@ -447,4 +449,25 @@ test('prepared and resumed task tools return canonical JSON even with absent opt
   assert.equal(Object.hasOwn(value.task.steps.apply,'code'),false);
   assert.equal(value.task.phase,'prepared');
  }
+});
+
+test('registered draft tool loads and validates local manifests before sending exact files to coordinator',async t=>{
+ const coordinator=await startCoordinator({drafts:true});t.after(()=>coordinator.close());
+ const directory=mkdtempSync(join(tmpdir(),'pbi-manifest-host-'));t.after(()=>rm(directory,{recursive:true,force:true}));
+ const {TaskStore}=await import('../task-store.mjs');const {writeFileSync}=await import('node:fs');
+ const {tools,workspace}=setup({advancedTools:false,taskDirectory:directory});t.after(()=>rm(workspace,{recursive:true,force:true}));
+ const token=join(directory,'token');writeFileSync(token,'a'.repeat(64));
+ const store=new TaskStore(directory);store.write('session-1',{id:'fixture',intent:'Generated local report',mode:'existing',project:'C:\\BI\\Sales\\Sales.pbip',phase:'prepared',createdAt:new Date().toISOString(),steps:{},connection:{protocol:'task-tools-v2',serviceUrl:coordinator.url,controlTokenFile:token},acceptance:[]});
+ const manifest=join(workspace,'draft.json'),source=join(workspace,'page.json');writeFileSync(source,'{"displayName":"Sales"}');
+ const draft={plan:{audience:'Operations',questions:['What changed?'],pages:[{title:'Sales',visuals:[{question:'What changed?',measure:'Actual sales',dimension:'Month',acceptance:'Matches reference'}]}]},changes:{summary:'Generated page',files:[{path:'Sales.Report/definition/pages/p/page.json',contentPath:'page.json',beforeSha256:null}]},pages:['p'],acceptance:['Reference total matches']};
+ writeFileSync(manifest,JSON.stringify(draft));const exec={agent:{id:'session-1'}};
+ const result=await tools.get('pbi_prepare_draft').execute({manifestPath:manifest},exec);
+ assert.equal(result.task.phase,'ready_to_execute');assert.equal(result.task.draftSource.mode,'manifest');
+ assert.equal(JSON.stringify(result).includes('displayName'),false);
+ const staged=coordinator.calls.find(call=>call.url==='/api/changes/stage');assert.equal(staged.hasControlAuth,true);
+ assert.deepEqual(JSON.parse(staged.body).value.files,[{path:'Sales.Report/definition/pages/p/page.json',content:'{"displayName":"Sales"}',beforeSha256:null}]);
+ assert.equal(JSON.parse(staged.body).sessionId,'session-1');
+ const calls=coordinator.calls.length,prior=store.read('session-1');draft.checks=[{query:'EVALUATE ROW("n",1)',expected:'not a number'}];writeFileSync(manifest,JSON.stringify(draft));
+ await assert.rejects(tools.get('pbi_prepare_draft').execute({manifestPath:manifest,revisionOf:result.task.change.digest},exec),/tool schema/);
+ assert.equal(coordinator.calls.length,calls);assert.deepEqual(store.read('session-1'),prior);
 });

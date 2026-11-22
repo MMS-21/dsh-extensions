@@ -10,13 +10,13 @@ export class Workflow {
   status(session){
     const stored=this.store.read(session);if(!stored)return {ok:true,task:null,paths:this.store.paths(session)};
     // Keep full recovery context on disk; return compact evidence, not complete diffs.
-    const {id,intent,mode,project,phase,nextAction,blocker,designSkills,capabilities,acceptance,pages,change,savePolicy}=stored;
+    const {id,intent,mode,project,phase,nextAction,blocker,designSkills,capabilities,acceptance,pages,change,savePolicy,draftSource}=stored;
     const steps=Object.fromEntries(Object.entries(stored.steps).map(([name,step])=>{
       const result=step.result??{};const visible={};
       for(const key of ['id','digest','status','reloadOutcome','path','sha256','requestedPage','actual','expected','tolerance','passed','observations','postCanvasVerification'])if(result[key]!==undefined)visible[key]=result[key];
       return [name,{outcome:step.outcome,code:step.code,attempt:step.attempt,result:visible}];
     }));
-    return toolJson({ok:true,task:{id,intent,mode,project,phase:phase==='awaiting_approval'?'ready_to_execute':phase,nextAction:phase==='awaiting_approval'?'Continue with pbi_execute_task; ask unresolved questions in chat.':nextAction,blocker,designSkills,capabilities,acceptance,pages,change,savePolicy,steps,history:(stored.history??[]).map(h=>({change:h.change,phase:h.phase}))},paths:this.store.paths(session)});
+    return toolJson({ok:true,task:{id,intent,mode,project,phase:phase==='awaiting_approval'?'ready_to_execute':phase,nextAction:phase==='awaiting_approval'?'Continue with pbi_execute_task; ask unresolved questions in chat.':nextAction,blocker,designSkills,capabilities,acceptance,pages,change,savePolicy,draftSource,steps,history:(stored.history??[]).map(h=>({change:h.change,phase:h.phase}))},paths:this.store.paths(session)});
   }
   async prepare(session,input){return this.store.exclusive(session,async()=>{
     let task=this.store.read(session);
@@ -40,6 +40,7 @@ export class Workflow {
   async draft(session,input){return this.store.exclusive(session,async()=>{
     const task=this.required(session);
     if(Object.values(task.steps).some(s=>['dispatching','unknown'].includes(s.outcome)))throw failure('Reconcile unfinished operations before changing the draft.','OUTCOME_UNKNOWN');
+    if(this.adapter.loadDraft)input=await this.adapter.loadDraft(task,input);
     if(task.change){
       if(input.revisionOf!==task.change.digest)throw failure('Supply revisionOf with the current draft digest to prepare a reviewed correction.','DRAFT_EXISTS');
       task.history=[...(task.history??[]),{change:task.change,phase:task.phase,steps:task.steps}];
@@ -50,11 +51,11 @@ export class Workflow {
     if(input.changes?.files?.some(f=>f.path.includes('.SemanticModel/'))&&!input.checks?.length)throw failure('Model changes require at least one bounded numerical acceptance query.','MODEL_CHECK_REQUIRED');
     await this.adapter.bind(task);
     const plan=await this.adapter.plan(input.plan);
-    task.plan=plan;task.pages=input.pages;task.acceptance=input.acceptance;task.refresh=input.refresh??null;task.checks=input.checks??[];task.phase='drafting';this.store.write(session,task);
+    task.draftSource=input.draftSource;task.plan=plan;task.pages=input.pages;task.acceptance=input.acceptance;task.refresh=input.refresh??null;task.checks=input.checks??[];task.phase='drafting';this.store.write(session,task);
     // Save the ID immediately after staging, before validation. A lost acknowledgment is unknown.
     await this.step(session,task,'stage',()=>this.adapter.stage({...input.changes,planId:plan.id??plan.planId}),r=>!!r.id&&!!r.digest);
     task.change=identity(task.steps.stage.result);this.store.write(session,task);
-    await this.step(session,task,'validate',()=>this.adapter.validate(task.change),()=>true);
+    await this.step(session,task,'validate',()=>this.adapter.validate(task.change),r=>r.status==='validated'||r.validation?.passed===true);
     task.phase='ready_to_execute';task.nextAction='Continue execution of this validated draft. Ask any unresolved business questions in chat.';this.store.write(session,task);
     return this.status(session);
   });}

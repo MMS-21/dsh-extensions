@@ -35,6 +35,12 @@ Load `dashboard-design-process` to create the design, `dashboard-design-patterns
 
 ## Execute and verify
 
+For generated reports, prefer writing definitions and a JSON draft manifest on
+disk, then call `pbi_prepare_draft` with only its absolute `manifestPath`. Files
+in the manifest can use `contentPath`; do not retype or print whole files into
+the conversation. Read [file-based draft submission](references/draft-manifests.md)
+for the schema, allowed locations, baseline hashes and recovery rules.
+
 With task tools, pass the design plan, explicit definition changes, affected page
 IDs, task-specific acceptance criteria, scalar DAX checks, and any required exact
 table refresh plan to `pbi_prepare_draft`. Continue by calling `pbi_execute_task` once the draft is validated and any

@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-plugin-powerbi-live-designer",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "description": "Power BI authoring with exact user-approved changes, guarded canvas reload and verified affected-table data refresh.",
   "type": "module",
@@ -39,7 +39,8 @@
     "setup-save.ps1",
     "requirements-save.txt",
     "SIMPLIFICATION-PLAN.md",
-    "tool-json.mjs"
+    "tool-json.mjs",
+    "draft-input.mjs"
   ],
   "dsh": {
     "bundle": {

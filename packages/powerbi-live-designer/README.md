@@ -1,4 +1,4 @@
-# Power BI task tools — 0.6.0
+# Power BI task tools — 0.6.1
 
 Power BI runs through the DSH chat and agent tools. There is no Power BI sidebar,
 launcher, embedded designer, Agent Performance page, or manual approval click.
@@ -29,6 +29,26 @@ No dataset path is hardcoded. Preserve PBIX originals and use a separate PBIP co
 For explicitly requested data-only refreshes use `action: refresh_data` with named
 tables. This skips design and file staging; it does not establish report appearance
 or business metric correctness.
+
+## File-based draft submission
+
+For generated reports, write a JSON manifest and definition files to a separate
+staging folder inside the session workspace, project directory, or task directory.
+Call `pbi_prepare_draft` with `{"manifestPath":"<absolute draft JSON path>"}`.
+The manifest contains the same plan/changes/pages/acceptance/checks/refresh fields
+as an inline draft, but each change may reference `contentPath` instead of content.
+Relative file paths resolve beside the manifest. Existing inline calls still work.
+
+See [the full manifest example](skills/analysis-report-workflow/references/draft-manifests.md).
+The plugin checks the expanded input against the tool schema, reads bounded UTF-8
+files once, preserves explicit target baseline hashes, and uses the captured text
+for ordinary backend staging/validation. It rejects links, path escapes, duplicate
+targets, oversized content and optional generated-content hash mismatches.
+No generator script is executed by the loader. No live definition is changed by
+reading a manifest. A compact hash/count receipt survives in task context.
+
+This removes the need for the model to reproduce all definition contents in a
+large tool call. It does not modify provider timeouts or guarantee provider uptime.
 
 ## Retained checks and recovery
 

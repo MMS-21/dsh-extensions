@@ -1,3 +1,12 @@
+# Current improvement — 0.6.1
+
+- `pbi_prepare_draft` accepts a local JSON `manifestPath`. Definition entries accept `contentPath` instead of inline file bodies; the five-tool interface is unchanged.
+- Manifests are checked against the same tool schema before planning or changing revision history. Bounded UTF-8 reads, contained roots, no symlinks/junctions, duplicate-target checks, explicit baseline hashes and optional content hashes are enforced.
+- Loaded definitions are captured once and passed through existing authenticated staging and validation. Draft-source hash/count receipts persist without returning file bodies to the model.
+- Failed staged validation now stops before reporting ready_to_execute. Generator scripts are not executed. Live project validation, checkpoints, design rules and recovery remain in place.
+- The purpose is smaller model tool arguments during generated report authoring; this does not alter provider/network timeout settings.
+- Validation: 70 Node tests passed, including registered-tool/coordinator integration, immutable staging snapshots, prior-draft preservation, schema rejection and content budgets. The installed DSH JSON validator passed; package audit includes the loader and guide without runtime artifacts. No browser UI changed, so native tool/HTTP integration tests are the applicable coverage.
+
 # Current delivery — 0.6.0
 
 The user requested a tools-only chat workflow and removal of all Power BI sidebar UI and manual approval requirements. This supersedes the historical sidebar/approval decisions recorded below.
