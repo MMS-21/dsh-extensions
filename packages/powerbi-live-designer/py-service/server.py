@@ -1,6 +1,6 @@
 """Power BI Live Designer MVP: loopback-only Desktop preview for DeepSeek Harness.
 
-Requires the @microsoft/powerbi-report-authoring-cli executable on PATH.
+Requires the Power BI report authoring CLI package entry or executable.
 No external Python packages required. Intended to run on the Windows PC with Desktop.
 """
 from __future__ import annotations
@@ -136,6 +136,11 @@ class Designer:
             if not node:
                 raise RuntimeError('Node executable is unavailable')
             cmd = [node, str(entry), *arguments]
+        elif executable.suffix.lower() in ('.js', '.mjs', '.cjs'):
+            node = shutil.which('node')
+            if not node:
+                raise RuntimeError('Node executable is unavailable')
+            cmd = [node, str(executable), *arguments]
         else:
             cmd = [str(executable), *arguments]
         try:
@@ -295,6 +300,8 @@ class Designer:
                 return self.changes.stage(session,params.get('value'))
             if operation == 'get':
                 return self.changes.describe(self.changes.load(change_id,session))
+            if operation == 'pending':
+                return {'change': self.changes.pending_review(session)}
             if operation == 'validate':
                 return self.changes.validate(change_id,session,self.validate_staged_project)
             if operation == 'approve':

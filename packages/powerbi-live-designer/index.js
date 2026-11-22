@@ -13,17 +13,17 @@
  *   - the per-session project/service binding and the explicit approval gate,
  *     enforced here in the Host rather than only in the browser.
  *
- * The plugin never spawns the CLI or the Python service itself. The operator
- * runs py-service/server.py next to Power BI Desktop; this plugin only talks to
- * its loopback HTTP API.
+ * For direct table refreshes the Host connects to Microsoft's Modeling MCP
+ * over stdio. File authoring still uses the loopback coordinator.
  */
 
 import {registerDesignSkills} from './skills.js';
 import {designBriefSchema, reviewFindingSchema} from './design-contracts.js';
-import {appendFileSync, mkdirSync, openSync, readSync, closeSync, fstatSync, readFileSync} from 'node:fs';
+import {appendFileSync, mkdirSync, openSync, readSync, closeSync, fstatSync, readFileSync, statSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {win32, resolve} from 'node:path';
 import {randomUUID} from 'node:crypto';
+import {listModelTables, refreshModelTables, validateRefreshTables} from './direct-model.mjs';
 
 export const name = 'powerbi-live-designer';
 export const inject = ['tools', 'connection', 'agents'];
@@ -33,7 +33,7 @@ const STATUS_TIMEOUT_MS = 30000;
 const ACTION_TIMEOUT_MS = 120000;
 const RUN_TIMEOUT_MS = 900000;
 const ARTIFACT_DIR = '.pbi-live-designer';
-const ACTIONS = ['configure', 'status', 'readiness', 'semantic', 'validation', 'journal', 'design-plan', 'design-review', 'plan', 'run', 'capture', 'abort', 'change-stage','change-get','change-validate','change-apply','change-reload'];
+const ACTIONS = ['configure', 'direct-connect', 'direct-refresh', 'status', 'readiness', 'semantic', 'validation', 'journal', 'design-plan', 'design-review', 'plan', 'run', 'capture', 'abort', 'change-stage','change-get','change-pending','change-validate','change-apply','change-reload'];
 const PAGE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
 
 function readString(value) {
@@ -57,6 +57,7 @@ export function apply(ctx, config) {
 
   /** sessionId -> { serviceUrl, project } */
   const bindings = new Map();
+  const directProjects = new Map();
   /** sessionId -> { planId, plan, manifest, createdAt } */
   const pending = new Map();
   /** sessionIds with a coordinator operation in flight */
@@ -65,10 +66,10 @@ export function apply(ctx, config) {
   const agents = ctx.agents;
   const logDirectory = fileURLToPath(new URL('./.runtime/', import.meta.url));
   const logPath = resolve(logDirectory, 'host-operations.jsonl');
-  function record(operation, outcome, id, errorType, sessionId) {
+  function record(operation, outcome, id, errorType, sessionId, table) {
     mkdirSync(logDirectory, {recursive: true});
     appendFileSync(logPath, JSON.stringify({at: new Date().toISOString(), operation,
-      outcome, operationId: id, sessionId, ...(errorType ? {errorType} : {})}) + '\n');
+      outcome, operationId: id, sessionId, ...(errorType ? {errorType} : {}), ...(table ? {table} : {})}) + '\n');
   }
   function hostEntries(sessionId) {
     let fd;
@@ -323,6 +324,11 @@ export function apply(ctx, config) {
     const sessionId = requireSession(body?.sessionId);
     if(op.startsWith('change-'))return changeCall(sessionId,op.slice(7),body?.value??{});
     switch (op) {
+      case 'direct-connect':
+        return connectDirect(sessionId, body.project);
+      case 'direct-refresh':
+        if (!readString(body.project)) throw Error('The refresh must identify the connected project.');
+        return {ok:true, refresh:await refreshDirect(sessionId, body.tables, body.project)};
       case 'configure':
         return await opConfigure(sessionId, body);
       case 'status':
@@ -367,6 +373,29 @@ export function apply(ctx, config) {
       default:
         throw new Error(`Unknown Power BI Live Designer operation ${String(op)}`);
     }
+  }
+
+  async function connectDirect(sessionId, project) {
+    if (typeof project !== 'string' || !win32.isAbsolute(project) || !project.toLowerCase().endsWith('.pbip')
+        || !statSync(project, {throwIfNoEntry:false})?.isFile()) {
+      throw Error('Choose the full path of the .pbip project open in Power BI Desktop.');
+    }
+    const tables = await listModelTables(project);
+    directProjects.set(sessionId, project);
+    return {ok:true, project, tables};
+  }
+
+  async function refreshDirect(sessionId, tables, expectedProject, signal) {
+    validateRefreshTables(tables);
+    const project = directProjects.get(sessionId);
+    if (!project || (expectedProject && !sameProject(project, expectedProject))) {
+      throw Error('Connect to this open Power BI project in the current chat before refreshing.');
+    }
+    const id = randomUUID();
+    return refreshModelTables({
+      project, tables, signal, journalDir:resolve(logDirectory, 'direct-refresh'),
+      record:(outcome, table) => record('direct-refresh', outcome, id, undefined, sessionId, table),
+    });
   }
 
   async function changeCall(sessionId, operation, value) {
@@ -428,6 +457,22 @@ export function apply(ctx, config) {
   /** Register the HTTP operations and the agent tools under this plugin's effect. */
   ctx.effect(() => {
     const disposers = [];
+    disposers.push(ctx.tools.register({
+      name:'pbi_connect_open_report',
+      description:'Connect directly to the exact open Power BI Desktop .pbip project and list its model tables. No Python coordinator is needed.',
+      parameters:{type:'object',additionalProperties:false,required:['project'],properties:{project:{type:'string'}}},
+      output:toolOutput,
+      execute:(args, exec) => connectDirect(toolSession(exec), args.project),
+    }));
+    disposers.push(ctx.tools.register({
+      name:'pbi_refresh_data',
+      description:'Refresh only the named tables in the connected open Power BI project when the user explicitly requests a data refresh. Verify row counts and report outcomes. Use this for existing reports; no file change set, reload, or screenshot is needed.',
+      parameters:{type:'object',additionalProperties:false,required:['tables'],properties:{
+        tables:{type:'array',minItems:1,maxItems:20,uniqueItems:true,items:{type:'string',minLength:1,maxLength:200}},
+      }},
+      output:toolOutput,
+      execute:(args, exec) => refreshDirect(toolSession(exec), args.tables, undefined, exec.signal),
+    }));
     const changeId={type:'string',pattern:'^[a-f0-9]{32}$'};
     const digest={type:'string',pattern:'^[a-f0-9]{64}$'};
     const stageValue={type:'object',additionalProperties:false,required:['planId','summary','files'],properties:{
@@ -445,8 +490,8 @@ export function apply(ctx, config) {
       ['pbi_run_model_refresh','processing-run','Run exact staged refresh within the parent approved change set. No separate refresh-approval command is required. Refuse changed model/project/source fingerprints; refresh only named tables and verify row counts. No automatic retry or full-model fallback. Row counts do not prove metric correctness.',{type:'object',additionalProperties:false,required:['id','digest'],properties:{id:changeId,digest}}],
       ['pbi_stage_changes','stage','Stage DSH-authored report/model definition text against a saved design plan. No live file changes. Return digest and reviewable diff. File approval also covers routine refresh of the applied unchanged model/source definitions; no second refresh approval. Generic authoring only; never infer file approval.',stageValue],
       ['pbi_get_change_set','get','Read an exact staged change set, validation, approval and diff location.',{type:'object',additionalProperties:false,required:['id'],properties:{id:changeId}}],
-      ['pbi_validate_changes','validate','Validate staged PBIR and deserialize staged TMDL through Microsoft offline tooling. Does not process live data or prove DAX results.',{type:'object',additionalProperties:false,required:['id'],properties:{id:changeId}}],
-      ['pbi_apply_changes','apply','Apply only an exact validated change set already approved through the user-only /pbi command. Creates a checkpoint; refuses stale files. No automatic model processing.',{type:'object',additionalProperties:false,required:['id','digest'],properties:{id:changeId,digest}}],
+      ['pbi_validate_changes','validate','Validate staged PBIR and deserialize staged TMDL. When actual edits pass validation, direct the user to Power BI sidebar → Review pending changes. For unchanged files and a data-only request, use pbi_connect_open_report and pbi_refresh_data.',{type:'object',additionalProperties:false,required:['id'],properties:{id:changeId}}],
+      ['pbi_apply_changes','apply','Apply an exact validated change set after the user approves it in the Power BI sidebar. Creates a checkpoint; refuses stale files. No automatic model processing.',{type:'object',additionalProperties:false,required:['id','digest'],properties:{id:changeId,digest}}],
       ['pbi_reload_changes','reload','Reload exact applied report/model definitions into the matching Desktop canvas after unsaved-state checks. Does not refresh model data. A timeout is unknown; inspect before retrying.',{type:'object',additionalProperties:false,required:['id','digest'],properties:{id:changeId,digest}}],
     ]) disposers.push(ctx.tools.register({name,description,
       parameters:{type:'object',additionalProperties:false,required:['value'],properties:{value:schema}},

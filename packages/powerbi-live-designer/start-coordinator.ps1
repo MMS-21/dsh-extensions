@@ -4,6 +4,19 @@ param(
     [string]$ModelingServer
 )
 $ErrorActionPreference = 'Stop'
+$authorPackage = '@microsoft/powerbi-report-authoring-cli'
+$authorDirectory = Join-Path $PSScriptRoot "node_modules/$authorPackage"
+$authorManifest = Join-Path $authorDirectory 'package.json'
+$expectedVersion = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'package.json') -Raw | ConvertFrom-Json).dependencies.$authorPackage
+if (!(Test-Path -LiteralPath $authorManifest)) {
+    throw 'The bundled Power BI CLI dependency is missing. Run the plugin installer or npm ci --ignore-scripts.'
+}
+$author = Get-Content -LiteralPath $authorManifest -Raw | ConvertFrom-Json
+if ($author.version -ne $expectedVersion) {
+    throw "Power BI Live Designer requires authoring CLI $expectedVersion. Run npm ci --ignore-scripts in the bundle directory."
+}
+$authorEntry = Join-Path $authorDirectory $author.bin.'powerbi-report-author'
+if (!(Test-Path -LiteralPath $authorEntry -PathType Leaf)) { throw 'The Power BI CLI executable entry is missing.' }
 $resolvedProject = (Resolve-Path -LiteralPath $Project).Path
 if ([IO.Path]::GetExtension($resolvedProject) -ne '.pbip' -and -not $resolvedProject.EndsWith('.Report')) {
     throw 'Choose a PBIP file or .Report folder; preserve the original PBIX.'
@@ -32,7 +45,7 @@ if (-not $ModelingServer) {
     $settings = Join-Path $runtime 'modeling-server.path'
     if (Test-Path -LiteralPath $settings) { $ModelingServer = (Get-Content -LiteralPath $settings -Raw).Trim() }
 }
-$arguments = @('-B', "`"$server`"", '--project', "`"$resolvedProject`"", '--port', $Port, '--control-token-file', "`"$controlToken`"")
+$arguments = @('-B', "`"$server`"", '--project', "`"$resolvedProject`"", '--port', $Port, '--control-token-file', "`"$controlToken`"", '--cli', "`"$authorEntry`"")
 if ($ModelingServer) { $arguments += @('--modeling-server', "`"$ModelingServer`"") }
 $python = (Get-Command python).Source
 $process = Start-Process -FilePath $python -ArgumentList $arguments -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $runtime 'coordinator.stdout.log') -RedirectStandardError (Join-Path $runtime 'coordinator.stderr.log')

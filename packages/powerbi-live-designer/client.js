@@ -223,7 +223,7 @@ window.__ModuleLoader__.load({
       }
     };
 
-    function makeBody(t) {
+    function makeBody(t, commands) {
       function Body(props) {
         const session = props.useSession?.();
         const sessionId = props.sessionId ?? session?.id;
@@ -246,6 +246,12 @@ window.__ModuleLoader__.load({
         const [connectionReady, setConnectionReady] = useState(false);
         const [inspection, setInspection] = useState(null);
         const [journal, setJournal] = useState(null);
+        const [reviewState, setReviewState] = useState(null);
+        const [reviewBusy, setReviewBusy] = useState(false);
+        const review = reviewState?.sessionId === sessionId ? reviewState : null;
+        const [directState, setDirectState] = useState(null);
+        const [directBusy, setDirectBusy] = useState(false);
+        const direct = directState?.sessionId === sessionId ? directState : null;
 
         const call = useCallback(async (op, body, signal) => {
           const response = await fetch(API_BASE + op, {
@@ -257,6 +263,65 @@ window.__ModuleLoader__.load({
           if (!response.ok || payload.ok === false) throw new Error(payload.error || ("HTTP " + response.status));
           return payload;
         }, [sessionId]);
+
+        async function connectOpenReport() {
+          setDirectBusy(true);
+          setDirectState(null);
+          try {
+            const {project:connectedProject, tables} = await call('direct-connect', {project});
+            setDirectState({sessionId, project:connectedProject, tables, selected:[]});
+            setMessage('');
+          } catch (error) {
+            setDirectState({sessionId, error:error.message});
+          } finally {
+            setDirectBusy(false);
+          }
+        }
+
+        async function refreshSelectedTables() {
+          if (directBusy || !direct?.selected?.length) return;
+          setDirectBusy(true);
+          try {
+            const {refresh:result} = await call('direct-refresh', {project:direct.project, tables:direct.selected});
+            setDirectState({...direct, result, error:result.error});
+          } catch (error) {
+            setDirectState({...direct, error:error.message});
+          } finally {
+            setDirectBusy(false);
+          }
+        }
+
+        async function reviewChanges() {
+          setReviewBusy(true);
+          setReviewState(null);
+          try {
+            const {change} = await call('change-pending');
+            setReviewState({sessionId, change});
+          } catch (error) {
+            setReviewState({sessionId, error:error.message});
+          } finally {
+            setReviewBusy(false);
+          }
+        }
+
+        async function approveChanges() {
+          const change = review?.change;
+          if (reviewBusy || !change?.changedFiles?.length || !change.reviewDiff) return;
+          setReviewBusy(true);
+          try {
+            const response = await commands?.execute(sessionId, `/pbi approve ${change.id} ${change.digest}`, []);
+            if (!response) throw Error('DSH approval is unavailable. Reopen DSH and review the changes again.');
+            const result = response.value?.result;
+            if (!response.ok || result?.kind !== 'success') {
+              throw Error(result?.text ?? response.error?.message ?? 'The approval command is unavailable.');
+            }
+            setReviewState({sessionId, approved:true});
+          } catch (error) {
+            setReviewState({sessionId, change, error:error.message});
+          } finally {
+            setReviewBusy(false);
+          }
+        }
 
         const refresh = useCallback(async (signal) => {
           if (typeof sessionId !== "string" || sessionId === "") return;
@@ -274,19 +339,21 @@ window.__ModuleLoader__.load({
             if (signal?.aborted) return;
             setConnectionReady(false);
             setMessage(String(error.message || error));
+            return false;
           }
+          return true;
         }, [call, sessionId]);
 
         useEffect(() => {
+          if (direct?.project) return;
           const controller = new AbortController();
           let timer;
           async function poll() {
-            await refresh(controller.signal);
-            if (!controller.signal.aborted) timer = setTimeout(poll, 5000);
+            if (await refresh(controller.signal) && !controller.signal.aborted) timer = setTimeout(poll, 5000);
           }
           poll();
           return () => { controller.abort(); clearTimeout(timer); };
-        }, [refresh]);
+        }, [refresh, direct?.project, connectionReady]);
 
         async function run(action) {
           if (busy) return;
@@ -404,7 +471,8 @@ window.__ModuleLoader__.load({
             "div",
             { style: css.header },
             h("h3", { style: css.title }, t("type.label")),
-            h("span", { style: { ...css.pill, ...(busy ? css.pillBusy : null) } }, busy ? t("working") : t(connectionReady ? "ready" : "disconnected"))
+            h("span", { style: { ...css.pill, ...(busy || directBusy ? css.pillBusy : null) } },
+              busy || directBusy ? t("working") : direct?.project ? "Connected to Power BI" : t(connectionReady ? "ready" : "disconnected"))
           ),
           h(
             "div",
@@ -451,8 +519,69 @@ window.__ModuleLoader__.load({
             ),
             connectionChecks ? h('div', {style:css.meta}, t('connectionChecks') + ': ' +
               Object.entries(connectionChecks).map(([key,value]) => t(key) + ': ' + String(value ?? 'unknown')).join(' · ')) : null,
-            state?.modelWritesEnabled !== true ? h('p', {style:css.hint}, t('readOnly')) : null,
+            !direct?.project && state?.modelWritesEnabled !== true ? h('p', {style:css.hint}, t('readOnly')) : null,
             message === "" ? null : h("div", { role:'status', style: { ...css.meta, color: "var(--dsw-alias-label-tertiary, GrayText)" } }, message)
+          ),
+          h('section', {style:css.card, 'aria-label':'Refresh Power BI data'},
+            h('h4', {style:css.cardTitle}, 'Refresh data'),
+            h('p', {style:css.hint}, 'Enter the open .pbip path above. Select the tables you want to reload from their data sources.'),
+            h('button', {type:'button', style:css.button, disabled:directBusy || !sessionId || !project.trim(), onClick:connectOpenReport},
+              'Connect to open report'),
+            direct?.project && h('div', null,
+              h('p', {style:css.meta}, direct.project),
+              h('fieldset', {style:{border:0,padding:0,margin:'8px 0',maxHeight:200,overflow:'auto'}, disabled:directBusy},
+                h('legend', null, 'Tables to refresh'),
+                ...direct.tables.map(table => h('label', {key:table, style:css.check},
+                  h('input', {type:'checkbox', checked:direct.selected.includes(table),
+                    disabled:!direct.selected.includes(table) && direct.selected.length >= 20,
+                    onChange:event => {
+                      const checked = event.target.checked;
+                      setDirectState(current => ({...current, selected:checked
+                        ? [...current.selected, table] : current.selected.filter(name => name !== table),
+                      }));
+                    },
+                  }), table)),
+              ),
+              h('button', {type:'button', style:css.button,
+                disabled:directBusy || !direct.selected.length || direct.result?.outcome === 'unknown',
+                onClick:refreshSelectedTables,
+              }, 'Refresh selected tables'),
+            ),
+            directBusy && h('p', {role:'status'}, 'Waiting for Power BI…'),
+            direct?.error && h('p', {role:'alert'}, direct.error),
+            direct?.result?.pendingTable && h('p', null, `Refresh unconfirmed for ${direct.result.pendingTable}.`),
+            direct?.result?.ok === false && direct.result.completed.length > 0
+              && h('p', null, `Power BI confirmed refresh for ${direct.result.completed.join(', ')}.`),
+            direct?.result?.ok && h('p', {role:'status'}, 'Refresh completed and row counts were read from Power BI.'),
+            direct?.result?.observations?.length > 0 && h('ul', null,
+              ...direct.result.observations.map(row => h('li', {key:row.table}, `${row.table} · ${row.rowCount.toLocaleString()} rows`))),
+          ),
+          h('section', {style:css.card, 'aria-label':'Review Power BI changes'},
+            h('h4', {style:css.cardTitle}, 'Review changes'),
+            h('p', {style:css.hint}, 'Review the report or model edits before the agent applies them.'),
+            h('button', {type:'button', style:css.button, disabled:reviewBusy || !sessionId, onClick:reviewChanges},
+              reviewBusy ? 'Working…' : 'Review pending changes'),
+            review?.error && h('p', {role:'alert'}, review.error),
+            review?.approved && h('p', {role:'status'}, 'Changes approved. Tell the agent to continue.'),
+            review && !review.change && !review.error && !review.approved
+              && h('p', {role:'status'}, 'There are no validated changes waiting for review in this chat.'),
+            review?.change && h('div', null,
+              h('p', {style:css.meta}, review.change.project),
+              h('p', null, review.change.summary),
+              !review.change.changedFiles.length
+                ? h('p', {role:'status'}, 'The files are unchanged. Use Refresh data above to load rows into the open model.')
+                : h('div', null,
+                  h('ul', null, ...review.change.changedFiles.map(file => h('li', {key:file}, file))),
+                  typeof review.change.reviewDiff === 'string' && review.change.reviewDiff
+                    ? h('div', null,
+                      h('pre', {style:{...css.plan,maxHeight:320,overflow:'auto'}, tabIndex:0, 'aria-label':'Exact file changes'}, review.change.reviewDiff),
+                      h('p', {style:css.hint}, 'Approval lets the agent apply these edits, reload definitions, and refresh the affected tables.'),
+                      h('button', {type:'button', style:css.button, disabled:reviewBusy, onClick:approveChanges},
+                        'Approve these changes'),
+                    )
+                    : h('p', {role:'status'}, 'The full diff cannot be shown here. Ask the agent to split this into smaller changes.'),
+                ),
+            ),
           ),
           inspection ? h('details', {open:true}, h('summary', null, t('inspection')),
             h('pre', {style:css.plan}, JSON.stringify({source:inspection.source,
@@ -557,7 +686,7 @@ window.__ModuleLoader__.load({
         name: "sidebar.right.pane.tab",
         key: TYPE_ID,
         locale: NAMESPACE
-      }, makeBody(t))), "powerbi-live-designer.body");
+      }, makeBody(t, ctx.remote?.commands))), "powerbi-live-designer.body");
 
       ctx.effect(() => ctx.slots.inject("sidebar.right.pane.tab.title", () => ctx.slots.register({
         name: "sidebar.right.pane.tab.title",
@@ -567,7 +696,7 @@ window.__ModuleLoader__.load({
     }
 
     exports.name = TYPE_ID;
-    exports.inject = ["slots", "locale", "sidebarRightTabs"];
+    exports.inject = ["slots", "locale", "sidebarRightTabs", "remote.commands"];
     exports.apply = apply;
 
     return module.exports;

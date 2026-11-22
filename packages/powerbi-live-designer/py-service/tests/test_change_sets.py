@@ -48,6 +48,27 @@ class ChangeSetTests(unittest.TestCase):
         self.assertEqual(result['status'],'staged')
         self.assertTrue(Path(result['diffPath']).is_file())
 
+    def test_pending_review_reconstructs_exact_diff_for_its_session(self):
+        record = self.stage()
+        self.assertIsNone(self.store.pending_review('session-a'))
+        self.store.validate(record['id'], 'session-a', lambda _: {'passed': True})
+        Path(record['diffPath']).write_text('incorrect review text', encoding='utf-8')
+        self.assertIsNone(self.store.pending_review('session-b'))
+        review = self.store.pending_review('session-a')
+        self.assertEqual(review['changedFiles'], ['fixture.Report/page.json'])
+        self.assertIn('-{"title":"Before"}', review['reviewDiff'])
+        self.assertIn('+{"title":"After"}', review['reviewDiff'])
+        self.assertEqual(review['digest'], record['digest'])
+
+    def test_pending_review_reports_identical_files_as_no_changes(self):
+        record = self.stage([{'path':'fixture.Report/page.json',
+                              'content':self.file.read_text(encoding='utf-8'),
+                              'beforeSha256':sha(self.file.read_bytes())}])
+        self.store.validate(record['id'], 'session-a', lambda _: {'passed': True})
+        review = self.store.pending_review('session-a')
+        self.assertEqual(review['changedFiles'], [])
+        self.assertEqual(review['reviewDiff'], '')
+
     def test_apply_requires_exact_native_approval(self):
         record=self.stage()
         with self.assertRaisesRegex(ValueError,'approval'):

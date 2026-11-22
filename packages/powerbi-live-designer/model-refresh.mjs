@@ -19,7 +19,7 @@ export function body(result) {
   if(value.error || value.success===false || value.data?.errorMessage)throw new Error('Microsoft modeling operation failed');
   return value;
 }
-export async function inspect(api, project, tables, resolveInstance=resolveDesktopInstance) {
+export async function connectModel(api, project, tables = [], resolveInstance=resolveDesktopInstance) {
   const instances=body(await api.call('connection_operations',{request:{operation:'ListLocalInstances'}})).data;
   if(!Array.isArray(instances))throw new Error('Instance discovery returned no list');
   const instance=await resolveInstance(project,instances);
@@ -31,12 +31,33 @@ export async function inspect(api, project, tables, resolveInstance=resolveDeskt
   if(!Array.isArray(databases)||databases.length!==1||!databases[0].id)throw new Error('Expected exactly one database');
   const inventory=body(await api.call('table_operations',{request:{...request,operation:'List'}})).data;
   if(!Array.isArray(inventory)||tables.some(name=>!inventory.some(t=>t.name===name)))throw new Error('An affected table is missing in the live model');
+  return {connectionName, inventory, target:{processId:instance.processId,port:instance.port,startTime:instance.startTime,databaseId:databases[0].id}};
+}
+
+export async function inspect(api, project, tables, resolveInstance=resolveDesktopInstance) {
+  const {connectionName, target} = await connectModel(api, project, tables, resolveInstance);
+  const request = {connectionName};
   const exported=await api.call('model_operations',{request:{...request,operation:'ExportTMDL',tmdlExportOptions:{serializationOptions:{includeChildren:true},maxReturnCharacters:-1}}});
   if(exported.isError)throw new Error('Cannot fingerprint live model');
   const resources=(exported.content??[]).filter(x=>x.type==='resource'&&typeof x.resource?.text==='string');
   if(resources.length!==1||!resources[0].resource.text||resources[0].resource.text.length>8000000)throw new Error('Incomplete live model fingerprint');
   const modelSha256=createHash('sha256').update(resources[0].resource.text).digest('hex');
-  return {connectionName,target:{processId:instance.processId,port:instance.port,startTime:instance.startTime,databaseId:databases[0].id,modelSha256}};
+  return {connectionName,target:{...target,modelSha256}};
+}
+
+export async function readTableCount(api, connectionName, table) {
+  const escaped = table.replaceAll("'", "''");
+  const {data} = body(await api.call('dax_query_operations', {request:{
+    connectionName, operation:'Execute', query:`EVALUATE ROW("__dsh_rows", COALESCE(COUNTROWS('${escaped}'), 0))`,
+    maxRows:1, resultMode:'Inline', timeoutSeconds:60,
+  }}));
+  if (data?.isTruncated || data?.rows?.length !== 1) throw Error('Row-count verification returned incomplete results');
+  const row = data.rows[0];
+  const values = Array.isArray(row) ? row : Object.values(row ?? {});
+  if (values.length !== 1 || !Number.isSafeInteger(values[0]) || values[0] < 0) {
+    throw Error('Row-count verification returned an invalid value');
+  }
+  return values[0];
 }
 export async function run(api, input, emit, resolveInstance=resolveDesktopInstance) {
   const current=await inspect(api,input.project,input.tables,resolveInstance);
@@ -51,14 +72,7 @@ export async function run(api, input, emit, resolveInstance=resolveDesktopInstan
   }
   const observations=[];
   for(const check of input.checks) {
-    const escaped=check.table.replaceAll("'","''");
-    const result=body(await api.call('dax_query_operations',{request:{connectionName:current.connectionName,operation:'Execute',query:`EVALUATE ROW("__dsh_rows", COALESCE(COUNTROWS('${escaped}'), 0))`,maxRows:1,resultMode:'Inline',timeoutSeconds:60}}));
-    const data=result.data;
-    if(data?.isTruncated||data?.rows?.length!==1)throw new Error('Row-count verification returned incomplete results');
-    const row=data.rows[0];
-    const values=Array.isArray(row)?row:Object.values(row);
-    if(values.length!==1||!Number.isSafeInteger(values[0])||values[0]<0)throw new Error('Row-count verification returned invalid value');
-    const count=values[0];
+    const count=await readTableCount(api,current.connectionName,check.table);
     observations.push({table:check.table,rowCount:count,passed:count>=check.minRows && count<=check.maxRows});
   }
   return {modelDataRefreshed:input.operation!=='verify',verified:observations.every(x=>x.passed),observations,

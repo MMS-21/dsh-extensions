@@ -1,7 +1,7 @@
 // Bind Desktop's exact current PBIP path to its Analysis Services child process.
 import {existsSync} from 'node:fs';
 import {join,win32} from 'node:path';
-import {pathToFileURL} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 const execute=promisify(execFile);
@@ -25,7 +25,16 @@ export function selectInstance(project,instances,desktopStatus,processes) {
   return bound[0];
 }
 export async function resolveDesktopInstance(project,instances) {
-  const candidate=process.env.PBI_DESKTOP_BRIDGE_MODULE || join(process.env.APPDATA??'','npm/node_modules/@microsoft/powerbi-report-authoring-cli/node_modules/@microsoft/powerbi-desktop-bridge-cli/dist/index.js');
+  let candidate=process.env.PBI_DESKTOP_BRIDGE_MODULE;
+  if (!candidate) {
+    try {
+      candidate = fileURLToPath(import.meta.resolve('@microsoft/powerbi-desktop-bridge-cli'));
+    } catch {
+      const entry = 'node_modules/@microsoft/powerbi-report-authoring-cli/node_modules/@microsoft/powerbi-desktop-bridge-cli/dist/index.js';
+      const local = fileURLToPath(new URL(entry, import.meta.url));
+      candidate = existsSync(local) ? local : join(process.env.APPDATA??'', 'npm', entry);
+    }
+  }
   if(!existsSync(candidate))throw Object.assign(new Error('Install the report-authoring CLI Desktop Bridge dependency or configure PBI_DESKTOP_BRIDGE_MODULE'),{code:'DESKTOP_BRIDGE_UNAVAILABLE'});
   const {readDesktopStatus}=await import(pathToFileURL(candidate).href);
   const status=await readDesktopStatus();

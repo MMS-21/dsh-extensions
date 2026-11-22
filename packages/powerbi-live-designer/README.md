@@ -4,7 +4,25 @@ This DSH bundle verifies a local coordinator and the exact PBIP project, inspect
 
 ## Start
 
-Open the PBIP in Power BI Desktop. From this bundle directory, run `./start-coordinator.ps1 -Project '<full PBIP path>' -Port 8766`. The hidden Python coordinator uses the installed `powerbi-report-author` CLI for read-only Desktop status. Choose another port if occupied; the launcher does not terminate unrelated processes. For a PBIX, first save a separate PBIP copy in Desktop. Keep the original PBIX.
+### Refresh an existing report
+
+Open the exact `.pbip` in Power BI Desktop and enter its path in the DSH
+sidebar. In **Refresh data**, choose **Connect to open report**, select the
+tables, and click **Refresh selected tables**. The agent can use
+`pbi_connect_open_report` and `pbi_refresh_data` for the same workflow when
+explicitly asked to refresh data. The plugin starts the bundled Microsoft
+Modeling MCP directly on Windows x64 and checks each refreshed table's
+row count. This path requires neither a coordinator nor a file change set.
+If a refresh result is unknown, inspect Power BI Desktop before retrying.
+
+### Plan and author a report
+
+For a linked Windows Desktop installation, exit DSH and run
+`./install-desktop.ps1` from this directory. The installer provisions the
+version of Microsoft's Power BI Report Authoring CLI pinned in the bundle.
+The coordinator checks that version before starting.
+
+Open the PBIP in Power BI Desktop. From this bundle directory, run `./start-coordinator.ps1 -Project '<full PBIP path>' -Port 8766`. The hidden Python coordinator uses the bundle's `powerbi-report-author` CLI for Desktop status. Choose another port if occupied; the launcher does not terminate unrelated processes. For a PBIX, first save a separate PBIP copy in Desktop. Keep the original PBIX.
 
 The bundle does not automatically spawn the coordinator. Bind it with `pbi_configure` or the sidebar's Connect button. Configuration checks the service's actual project; a mismatched project is rejected, and a failed connection does not overwrite an existing verified binding. Desktop availability and unsaved changes are reported separately. The last check is not a promise of ongoing connectivity or source-data freshness.
 
@@ -56,7 +74,7 @@ DSH prepares report/model definition changes; this plugin does not choose charts
 
 pbi_validate_changes validates the isolated report with the real authoring CLI and deserializes the isolated model through Microsoft's offline modeling server. Any schema coverage warning or missing validator blocks approval. Offline parsing does not prove DAX results, data loading or visual appearance. The modeling server must already have its EULA accepted explicitly by the user. The launcher reads the configured executable from .runtime/modeling-server.path; the operator must explicitly authorize EULA acceptance before the acceptance marker is provisioned.
 
-The user runs /pbi review ID, then /pbi approve ID SHA256 after reviewing the exact diff. No model-facing approval tool or approval HTTP proxy is registered. The private coordinator control token stays on the host. pbi_apply_changes requires the same session, project, digest, successful validation, unchanged source/staged files and a clear Desktop unsaved-state preflight. It checkpoints affected files before replacement. Approval cannot be reused after application.
+In the Power BI sidebar, select **Review pending changes**, read the project and diff, then select **Approve these changes**. The button uses DSH's native command channel to approve the exact change in that chat. For a data-only request with identical files, the sidebar directs you to **Refresh now** in Power BI Desktop. The slash command remains available for clients without the sidebar. No model-facing approval tool or approval HTTP proxy is registered. The private coordinator control token stays on the host. pbi_apply_changes requires the same session, project, digest, successful validation, unchanged source/staged files and a clear Desktop unsaved-state preflight. It checkpoints affected files before replacement. Approval cannot be reused after application.
 
 pbi_reload_changes checks the applied hashes, validates again and rechecks unsaved Desktop state before invoking report-only or model-definition reload as appropriate. It does not import/refresh rows or verify analytical results. Unknown reload outcomes block automatic retries. The user-only /pbi rollback ID SHA256 restores checkpointed files only if they remain at the applied version; subsequent edits block recovery. File rollback does not restore Desktop's in-memory state or undo data processing. Interrupted application remains visible and may require operator recovery.
 
@@ -74,7 +92,7 @@ Testing separates mocked processing/transport tests from real Microsoft discover
 
 ### Live execution fixes (0.4.2)
 
-Stage requests use the coordinator's `{value, sessionId}` envelope. Synchronous Microsoft refresh calls may acknowledge success with `isError: false` and an empty content array; row counts are still queried separately. The model adapter verifies the exact open PBIP path through Desktop Bridge and maps that window to its Analysis Services child process; titles are not identity. The Desktop Bridge dependency comes with the report-authoring CLI; set `PBI_DESKTOP_BRIDGE_MODULE` if it is installed outside the standard per-user npm location.
+Stage requests use the coordinator's `{value, sessionId}` envelope. Synchronous Microsoft refresh calls may acknowledge success with `isError: false` and an empty content array; row counts are still queried separately. The model adapter verifies the exact open PBIP path through Desktop Bridge and maps that window to its Analysis Services child process; titles are not identity. The Desktop Bridge dependency comes with the bundled report-authoring CLI. Set `PBI_DESKTOP_BRIDGE_MODULE` to override its location.
 
 A successful table refresh is followed by report-only redraw and a second row-count verification. The operation never reloads model definitions after processing. A replay of an already completed definition reload is a no-op if the complete source snapshot still matches. If a redraw completed but its read-only verification failed, a retry only repeats verification. Unknown redraw outcomes remain blocked.
 

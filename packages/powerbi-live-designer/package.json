@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-plugin-powerbi-live-designer",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "private": true,
   "description": "Power BI authoring with exact user-approved changes, guarded canvas reload and verified affected-table data refresh.",
   "type": "module",
@@ -30,6 +30,7 @@
     "microsoft-mcp.mjs",
     "model-validator.mjs",
     "model-refresh.mjs",
+    "direct-model.mjs",
     "desktop-binding.mjs"
   ],
   "dsh": {
@@ -39,12 +40,19 @@
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-client-ui-sidebar-right"
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-commands"
       ]
     }
   },
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "test:python": "python -B -m unittest discover -s py-service/tests -v"
+  },
+  "dependencies": {
+    "@microsoft/powerbi-report-authoring-cli": "0.5.0"
+  },
+  "optionalDependencies": {
+    "@microsoft/powerbi-modeling-mcp-win32-x64": "1.0.1"
   }
 }

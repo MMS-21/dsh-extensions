@@ -2,10 +2,14 @@
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import {fileURLToPath} from 'node:url';
-import {readFileSync,writeFileSync} from 'node:fs';
+import {existsSync,readFileSync,writeFileSync} from 'node:fs';
 
 export async function withMicrosoftMcp(work) {
-  const exe=process.env.PBI_MODELING_MCP_EXE || fileURLToPath(new URL('./authoring-tools/node_modules/@microsoft/powerbi-modeling-mcp-win32-x64/dist/powerbi-modeling-mcp.exe',import.meta.url));
+  const executable = 'node_modules/@microsoft/powerbi-modeling-mcp-win32-x64/dist/powerbi-modeling-mcp.exe';
+  const bundled = fileURLToPath(new URL(executable, import.meta.url));
+  const legacy = fileURLToPath(new URL(`authoring-tools/${executable}`, import.meta.url));
+  const exe = process.env.PBI_MODELING_MCP_EXE || [bundled, legacy].find(existsSync);
+  if (!exe) throw Error('Microsoft Modeling MCP is missing. Run the Power BI plugin installer.');
   const accepted=(()=>{try{return readFileSync(new URL('./.runtime/modeling-eula-accepted',import.meta.url),'utf8').trim()==='accepted-by-user';}catch{return false;}})();
   const child=spawn(exe,accepted?['--start','--accept-eula']:['--start'],{stdio:['pipe','pipe','pipe'],windowsHide:true});
   const pending=new Map();let seq=0;let diagnostic='';

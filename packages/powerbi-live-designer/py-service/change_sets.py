@@ -114,6 +114,41 @@ class ChangeSets:
     def save(self, record):
         atomic_json(self.directory/record['id']/'manifest.json', record)
 
+    def pending_review(self, session):
+        manifests = sorted(self.directory.glob('*/manifest.json'),
+                           key=lambda file: file.stat().st_mtime, reverse=True)
+        for manifest in manifests:
+            try:
+                record = self.load(manifest.parent.name, session)
+            except (OSError, ValueError, KeyError):
+                continue
+            if record['status'] != 'validated':
+                continue
+            self.verify(record)
+            diff = []
+            size = 0
+            changed = [entry for entry in record['files'] if entry['beforeSha256'] != entry['afterSha256']]
+            for entry in changed:
+                path = entry['path']
+                before = self.target(path).read_bytes() if entry['beforeSha256'] is not None else b''
+                after = (manifest.parent/'project'/path).read_bytes()
+                if sha(after) != entry['afterSha256'] or (entry['beforeSha256'] is not None and sha(before) != entry['beforeSha256']):
+                    raise ValueError('Files changed while preparing review. Stage the changes again.')
+                for line in difflib.unified_diff(before.decode('utf-8').splitlines(True),
+                                                 after.decode('utf-8').splitlines(True),
+                                                 fromfile=f'before/{path}', tofile=f'after/{path}'):
+                    size += len(line)
+                    if size > 120_000:
+                        break
+                    diff.append(line)
+                if size > 120_000:
+                    break
+            return self.describe(record) | {
+                'reviewDiff': ''.join(diff) if size <= 120_000 else None,
+                'changedFiles': [entry['path'] for entry in changed],
+            }
+        return None
+
     def stage(self, session, request):
         if not self.project.is_file():
             raise ValueError('File change sets require a PBIP project file')
