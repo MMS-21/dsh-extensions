@@ -6,6 +6,9 @@ import {readFileSync} from 'node:fs';
 function fixture() {
   let plugin;
   let Body;
+  let tab;
+  let shortcut;
+  let opened;
   const react = {createElement:(type,props,...children)=>({type,props:props??{},children}),
     useState:value=>[value,()=>{}],useEffect:()=>{},useCallback:fn=>fn};
   vm.runInNewContext(readFileSync(new URL('../client.js',import.meta.url),'utf8'), {
@@ -13,13 +16,26 @@ function fixture() {
     AbortSignal, setTimeout, clearTimeout,
   });
   plugin.apply({locale:{bind:()=>key=>key,register:()=>()=>{}},
-    effect:fn=>fn(),sidebarRightTabs:{register:()=>()=>{}},
+    effect:fn=>fn(),sidebarRightTabs:{register:value=>{tab=value;return()=>{};}},
+    shortcuts:{register:value=>{shortcut=value;return()=>{};}},
+    sidebarRight:{commandTarget:element=>element,openTabFromTarget:(id,target)=>{opened={id,target};}},
     slots:{inject:(_name,fn)=>fn(),register:(options,component)=>{if(options.name==='sidebar.right.pane.tab')Body=component;return()=>{};}}});
-  return Body;
+  return {Body, tab, shortcut, getOpened:()=>opened};
 }
 
+test('the right sidebar launcher opens Power BI in the active session', () => {
+  const {tab, shortcut, getOpened}=fixture();
+  assert.equal(tab.guide[0].commandId,shortcut.id);
+  assert.equal(shortcut.resolve({}).status,'blocked');
+  const target={sessionId:'native-session'};
+  const action=shortcut.resolve({target});
+  assert.equal(action.status,'handled');
+  action.run();
+  assert.deepEqual(getOpened(),{id:tab.id,target});
+});
+
 test('sidebar uses the native session hook and keeps writes disabled before verification', () => {
-  const Body=fixture();
+  const {Body}=fixture();
   const view=Body({useSession:()=>({id:'native-session'})});
   const all=[];
   function walk(node){if(!node||typeof node!=='object')return;all.push(node);for(const child of node.children??[])Array.isArray(child)?child.forEach(walk):walk(child);}

@@ -675,11 +675,26 @@ window.__ModuleLoader__.load({
         title: () => t("type.label"),
         guide: [{
           id: "open",
+          commandId: "powerbi-live-designer.open",
           order: 30,
           title: () => t("guide.title"),
           description: () => t("guide.description")
         }]
       }), "powerbi-live-designer.type");
+
+      ctx.effect(() => ctx.shortcuts.register({
+        id: "powerbi-live-designer.open",
+        label: () => t("type.label"),
+        aliases: ["power bi", "power bi live designer"],
+        defaults: {},
+        regions: ["page", "editable", "terminal"],
+        modals: [],
+        resolve: ({target: element}) => {
+          const target = ctx.sidebarRight.commandTarget(element);
+          if (target === undefined) return {status: "blocked", reason: t("noSession")};
+          return {status: "handled", run: () => ctx.sidebarRight.openTabFromTarget(TYPE_ID, target)};
+        }
+      }), "powerbi-live-designer.open");
 
       ctx.effect(() => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
         name: "sidebar.right.pane.tab",
@@ -695,7 +710,7 @@ window.__ModuleLoader__.load({
     }
 
     exports.name = TYPE_ID;
-    exports.inject = ["slots", "locale", "sidebarRightTabs", "remote.commands"];
+    exports.inject = ["slots", "locale", "sidebarRightTabs", "sidebarRight", "shortcuts", "remote.commands"];
     exports.apply = apply;
 
     return module.exports;
