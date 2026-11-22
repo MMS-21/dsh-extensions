@@ -197,3 +197,12 @@ class ProcessingTests(unittest.TestCase):
         self.assertTrue(done['postCanvasVerification']['verified'])
         self.assertFalse(any('--reload' in call for call in calls))
         self.assertEqual(self.adapter.writes,1)
+
+    def test_refresh_inherits_automatic_task_authorization(self):
+        change=self.store.load(self.change_id,'session-a')
+        change['approval']={'digest':change['digest'],'source':'task-workflow'}
+        self.store.save(change)
+        record=self.staged()
+        result=self.processing.execute(record['id'],'session-a',record['digest'])
+        self.assertEqual(result['status'],'verified')
+        self.assertEqual(self.adapter.writes,1)

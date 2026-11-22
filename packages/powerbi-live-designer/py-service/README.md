@@ -1,20 +1,12 @@
-> Historical starter documentation. The current 0.4.2 package README one directory above takes precedence.
+# Local Power BI coordinator
 
-# Power BI Live Designer Starter v0.2
+This is the hidden loopback backend for the chat-based task tools. Preparation
+starts it automatically; users do not open a browser or sidebar.
 
-Local preview and guarded smart affected-table refresh planning for Power BI Desktop and DeepSeek Harness.
+Change operations require the private host control token. The task workflow can
+authorize only the exact validated change digest. Source/session/project checks,
+checkpoints, unsaved-work guards, processing journals and evidence checks remain.
+The former web UI and static HTML routes were removed in 0.6.0.
 
-Read `IMPLEMENTATION_GUIDE.md` in this archive before use. This prototype is not an unattended production refresh engine. Model processing is disabled until an operator configures and tests the installed Power BI MCP operation profile, and full visual AI review is a future integration.
-
-Quick start on Windows with a local `.pbip` open in Power BI Desktop:
-
-```powershell
-npm install -g @microsoft/powerbi-report-authoring-cli
-cd C:\Tools\powerbi_live_designer_starter
-py -3 -m unittest discover -s tests -v
-py -3 server.py --project 'C:\BI\Sales\Sales.pbip' --port 8765
-```
-
-Open `http://127.0.0.1:8765` in the DeepSeek Harness Desktop Browser sidebar.
-
-To enable optional processing, read `IMPLEMENTATION_GUIDE.md`, install `mcp` and `jsonschema`, inspect actual MCP tool schemas with `inspect_mcp.py`, and create a validated private `mcp_profile.json`. Do not add `--mcp-profile` until real Desktop support is tested.
+For manual diagnostics use `start-coordinator.ps1` with an explicit project and
+unused port. Normal agent work uses the five task tools described in ../README.md.

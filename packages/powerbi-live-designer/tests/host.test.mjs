@@ -140,7 +140,7 @@ function setup(config = {allowModelWrites:true}, liveAgents = [{id:'session-1'}]
       return undefined;
     },
   };
-  apply(ctx, config);
+  apply(ctx, {advancedTools:true,...config});
   return { routes, tools, workspace };
 }
 
@@ -154,17 +154,13 @@ async function post(route, body) {
   return { status: response.status, body: await response.json() };
 }
 
-test('both v6 routes serve the original HTML bytes', async () => {
-  const {routes}=setup();
-  for (const name of ['powerbi_live_designer_v6_reference.html','agent_performance_v6_reference.html']) {
-    const route=routes.get('/api/pbi-live-designer/previews/'+name);
-    assert.deepEqual(route.methods,['GET']);
-    const response=route.fetch();
-    assert.match(response.headers.get('content-type'),/^text\/html/);
-    assert.match(response.headers.get('content-security-policy'),/sandbox allow-scripts/);
-    assert.deepEqual(Buffer.from(await response.arrayBuffer()),await readFile(new URL('../previews/'+name,import.meta.url)));
+test('sidebar preview routes are no longer registered',()=>{const {routes}=setup();assert.equal([...routes.keys()].some(path=>path.includes('/previews/')),false);});
 
-  }
+test('simple mode exposes exactly five task tools without any approval tool',()=>{
+  const {tools}=setup({advancedTools:false});
+  assert.deepEqual([...tools.keys()].sort(),['pbi_execute_task','pbi_inspect_task','pbi_prepare_draft','pbi_prepare_task','pbi_task_status']);
+  assert.equal(tools.has('pbi_run_approved_refresh'),false);
+  assert.throws(()=>tools.get('pbi_task_status').execute({}, {agent:{id:'not-live'}}),/not live/);
 });
 
 test('task setup is scoped to the chat and requires a saved PBIP before connecting', async () => {
@@ -436,5 +432,19 @@ test('staging tools preserve the coordinator value envelope and server-owned ses
   const call=coordinator.calls.find(x=>x.url==='/api/changes/'+path);
   assert.deepEqual(JSON.parse(call.body),{value,sessionId:'session-1'});
   assert.equal(call.hasControlAuth,true);
+ }
+});
+
+test('prepared and resumed task tools return canonical JSON even with absent optional fields',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'pbi-output-json-'));t.after(()=>rm(directory,{recursive:true,force:true}));
+ const {TaskStore}=await import('../task-store.mjs');const store=new TaskStore(directory);
+ store.write('session-1',{id:'fixture',intent:'Resume existing work',mode:'existing',project:'C:\\Reports\\Any.pbip',phase:'prepared',steps:{apply:{outcome:'succeeded',result:{status:'applied'}}},createdAt:new Date().toISOString(),designSkills:[],acceptance:[],savePolicy:'manual'});
+ const {tools}=setup({advancedTools:false,taskDirectory:directory});const exec={agent:{id:'session-1'}};
+ for(const name of ['pbi_task_status','pbi_prepare_task']){
+  const value=await tools.get(name).execute(name==='pbi_prepare_task'?{intent:'Resume existing work'}:{},exec);
+  assert.deepEqual(value,JSON.parse(JSON.stringify(value)),name+' must survive DSH output snapshot');
+  assert.equal(Object.hasOwn(value.task,'blocker'),false);
+  assert.equal(Object.hasOwn(value.task.steps.apply,'code'),false);
+  assert.equal(value.task.phase,'prepared');
  }
 });

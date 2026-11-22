@@ -1,3 +1,5 @@
+> Historical architecture notes. The browser/sidebar instructions below are obsolete as of 0.6.0. Use the chat task tools documented in ../README.md. No sidebar or manual approval is required.
+
 > Historical v0.2 design guide. For current 0.4.2 behavior and commands, use the package README one directory above.
 
 # Power BI Live Designer for DeepSeek Harness

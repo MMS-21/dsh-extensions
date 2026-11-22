@@ -1,3 +1,4 @@
+param([switch]$SkipAutomaticSave)
 $ErrorActionPreference = 'Stop'
 if (Get-Process -Name 'DeepSeek Harness' -ErrorAction SilentlyContinue) {
     throw 'Quit DeepSeek Harness before installing Power BI Live Designer.'
@@ -11,6 +12,10 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Unable to install the pinned Power BI CLI dependency.' }
 } finally {
     Pop-Location
+}
+if (-not $SkipAutomaticSave) {
+    & (Join-Path $source 'setup-save.ps1')
+    if ($LASTEXITCODE -ne 0) { throw 'Optional automatic-save setup failed. Use -SkipAutomaticSave for manual-save mode.' }
 }
 $original = [IO.File]::ReadAllText($manifest)
 $package = $original | ConvertFrom-Json
@@ -41,5 +46,5 @@ try {
     [IO.File]::WriteAllText($manifest, $original, [Text.UTF8Encoding]::new($false))
     throw
 }
-Write-Output 'Power BI Live Designer bundle registered. Restart DSH, then open a chat to connect to your coordinator.'
+Write-Output 'Power BI Live Designer bundle registered. Restart DSH; task preparation starts its coordinator automatically.'
 Write-Output "Profile backup: $backup"

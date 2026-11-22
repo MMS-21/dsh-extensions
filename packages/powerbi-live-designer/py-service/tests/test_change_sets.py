@@ -170,3 +170,14 @@ class ChangeSetTests(unittest.TestCase):
         result=restarted.rollback(record['id'],'session-a',record['digest'],lambda:None)
         self.assertEqual(result['status'],'rolled-back')
         self.assertEqual(self.file.read_bytes(),before)
+
+    def test_task_workflow_authorizes_exact_validated_changes_without_manual_approval(self):
+        record=self.stage()
+        with self.assertRaises(ValueError):
+            self.store.approve(record['id'],'session-a',record['digest'],source='task-workflow')
+        self.store.validate(record['id'],'session-a',lambda _: {'passed':True})
+        authorized=self.store.approve(record['id'],'session-a',record['digest'],source='task-workflow')
+        self.assertEqual(authorized['approval'],{'digest':record['digest'],'source':'task-workflow'})
+        applied=self.store.apply(record['id'],'session-a',record['digest'],lambda:None)
+        self.assertEqual(applied['status'],'applied')
+        self.assertEqual(json.loads(self.file.read_text())['title'],'After')

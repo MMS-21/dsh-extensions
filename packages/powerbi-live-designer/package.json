@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-plugin-powerbi-live-designer",
-  "version": "0.4.3",
+  "version": "0.6.0",
   "private": true,
   "description": "Power BI authoring with exact user-approved changes, guarded canvas reload and verified affected-table data refresh.",
   "type": "module",
@@ -19,13 +19,10 @@
     "locale/*.json",
     "icon.svg",
     "README.md",
-    "previews/*.html",
-    "previews/live.js",
     "skills.js",
     "skills/**",
     "SKILLS-SOURCE.md",
     "py-service/*.py",
-    "py-service/web/**",
     "start-coordinator.ps1",
     "LICENSE.skills",
     "design-contracts.js",
@@ -33,28 +30,26 @@
     "model-validator.mjs",
     "model-refresh.mjs",
     "direct-model.mjs",
-    "desktop-binding.mjs"
+    "desktop-binding.mjs",
+    "task-store.mjs",
+    "workflow.mjs",
+    "prepare-project.mjs",
+    "project-snapshot.mjs",
+    "save-project.mjs",
+    "setup-save.ps1",
+    "requirements-save.txt",
+    "SIMPLIFICATION-PLAN.md",
+    "tool-json.mjs"
   ],
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
-    },
-    "client": {
-      "platform": "web",
-      "immediately": true,
-      "inject": [
-        "@deepseek-ai/dsh-client-ui-sidebar-right",
-        "@deepseek-ai/dsh-client-shortcuts",
-        "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-connection",
-        "@deepseek-ai/dsh-client-ui-commands"
-      ]
     }
   },
   "scripts": {
-    "build:v6": "node build-v6.mjs",
-    "test": "node build-v6.mjs --check && node --test tests/*.test.mjs",
-    "test:python": "python -B -m unittest discover -s py-service/tests -v"
+    "test": "node --test tests/*.test.mjs",
+    "test:python": "python -B -m unittest discover -s py-service/tests -v",
+    "test:dsh-json": "node tests/dsh-json-runtime.mjs"
   },
   "dependencies": {
     "@microsoft/powerbi-report-authoring-cli": "0.5.0"

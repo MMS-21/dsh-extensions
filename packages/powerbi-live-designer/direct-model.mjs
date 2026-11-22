@@ -1,8 +1,33 @@
 import {createHash} from 'node:crypto';
 import {mkdirSync, rmSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {connectModel, mutationAcknowledged, readTableCount} from './model-refresh.mjs';
+import {connectModel, mutationAcknowledged, readTableCount, body} from './model-refresh.mjs';
 import {withMicrosoftMcp} from './microsoft-mcp.mjs';
+
+export async function queryModel(project,query,maxRows=100,withMcp=withMicrosoftMcp,resolveInstance){
+  if(typeof query!=='string'||query.length>12000||!/^\s*EVALUATE\b/i.test(query)||!Number.isInteger(maxRows)||maxRows<1||maxRows>100)throw Error('Use a bounded EVALUATE query with 1–100 maximum rows.');
+  return withMcp(async api=>{
+    const {connectionName}=await connectModel(api,project,[],resolveInstance);
+    const {data}=body(await api.call('dax_query_operations',{request:{connectionName,operation:'Execute',query,maxRows,resultMode:'Inline',timeoutSeconds:60}}));
+    if(!Array.isArray(data?.rows)||data.rows.length>maxRows)throw Error('Model query returned an invalid row budget.');
+    return {ok:true,rows:data.rows,isTruncated:data.isTruncated===true,maxRows};
+  });
+}
+
+/** Bounded scalar acceptance checks. DAX Execute reads a query; no model CRUD tools exposed. */
+export async function verifyScalar(project, check, withMcp=withMicrosoftMcp,resolveInstance) {
+  if(!check||typeof check.query!=='string'||check.query.length>12000||!/^\s*EVALUATE\b/i.test(check.query)
+      ||typeof check.expected!=='number'||!Number.isFinite(check.expected)
+      ||(check.tolerance!==undefined&&(!Number.isFinite(check.tolerance)||check.tolerance<0)))throw Error('Provide an EVALUATE scalar query, finite expected value and nonnegative tolerance.');
+  return withMcp(async api=>{
+    const {connectionName}=await connectModel(api,project,[],resolveInstance);
+    const {data}=body(await api.call('dax_query_operations',{request:{connectionName,operation:'Execute',query:check.query,maxRows:2,resultMode:'Inline',timeoutSeconds:60}}));
+    if(data?.isTruncated||data?.rows?.length!==1)throw Error('Acceptance query must return exactly one complete row.');
+    const values=Array.isArray(data.rows[0])?data.rows[0]:Object.values(data.rows[0]??{});
+    if(values.length!==1||typeof values[0]!=='number'||!Number.isFinite(values[0]))throw Error('Acceptance query must return one finite numeric value.');
+    return {actual:values[0],expected:check.expected,tolerance:check.tolerance??0,passed:Math.abs(values[0]-check.expected)<=(check.tolerance??0)};
+  });
+}
 
 export function validateRefreshTables(tables) {
   if (!Array.isArray(tables) || tables.length < 1 || tables.length > 20

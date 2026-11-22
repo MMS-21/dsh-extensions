@@ -1,5 +1,9 @@
 # Power BI adapter
 
+When the five task tools are present, follow the preferred task workflow in the
+parent SKILL.md. The low-level procedures below are for `advancedTools: true`
+or older hosts. Do not interleave them with a managed task execution.
+
 ## Choose the report and operation
 
 Start Power BI Live Designer using `pbi_start_task` with the intended mode. For a new report, ask the user to save a new Power BI Project (.pbip) in Power BI Desktop and paste the full path into chat. For an existing report, ask them to open its .pbip and paste the full path. Confirm the target using `pbi_start_task` with the same mode and exact path before any connection, design or authoring tool. A source file or a report name alone is insufficient. Use a separate chat for a different project.
@@ -23,7 +27,7 @@ New operation events identify specific Desktop actions, safe diagnostic codes an
 
 DSH chooses and authors the report/model definitions using the design skills. Use pbi_stage_changes with the saved design plan, explicit relative paths, proposed text and current beforeSha256 checksums. Stage CSV import definitions only as proposed model files; this does not run the import. The plugin never generates business-specific visuals or models for the agent. Bind fields using the real table entity (`SourceRef.Entity`) and property; do not treat a table name as an undeclared query-source alias. Schema validation is separate from runtime binding and rendering.
 
-Use `pbi_validate_changes` on the isolated copy. For actual edits, direct the user to **Power BI Live Designer → Change review → Review pending changes → Approve these changes** to inspect and approve the diff. The sidebar binds approval to the exact digest. This also authorizes routine refresh and verification against those applied model/source definitions. Design feedback and review findings do not authorize file execution. Then `pbi_apply_changes` can checkpoint and apply that exact validated version. Changed project/session, source files or staged content invalidate approval. Route data-only requests with unchanged definitions to the direct refresh workflow.
+Use `pbi_prepare_draft` and `pbi_execute_task` for validated file changes. The task runner authorizes the exact digest through its private host channel. No sidebar, manual approval, or approval command is required. Ask unresolved business questions in chat. Project/session mismatches and changed source or staged content still stop execution.
 
 Use pbi_reload_changes only after application. This rechecks Desktop unsaved state and reloads report/model definitions, not data. Capture optional evidence separately; analytical and accessibility checks remain explicit tasks. On a timeout, inspect state and journal; never blindly repeat reload. The user can use /pbi rollback ID SHA256 to restore unchanged checkpointed files, but that does not undo Desktop's in-memory state. Report partial/unknown outcomes and stop dependent work.
 

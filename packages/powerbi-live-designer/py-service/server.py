@@ -304,6 +304,8 @@ class Designer:
                 return {'change': self.changes.pending_review(session)}
             if operation == 'validate':
                 return self.changes.validate(change_id,session,self.validate_staged_project)
+            if operation == 'authorize':
+                return self.changes.approve(change_id,session,digest,source='task-workflow')
             if operation == 'approve':
                 return self.changes.approve(change_id,session,digest)
             if operation == 'apply':
@@ -589,16 +591,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self._check_host():
             return
         route = urlparse(self.path).path
-        directory = Path(__file__).resolve().parent / "web"
-        static = {
-            "/": ("index.html", "text/html; charset=utf-8"),
-            "/app.js": ("app.js", "application/javascript; charset=utf-8"),
-            "/style.css": ("style.css", "text/css; charset=utf-8"),
-        }
-        if route in static:
-            filename, content_type = static[route]
-            self._write(200, (directory / filename).read_bytes(), content_type)
-        elif route == "/api/state":
+        if route == "/api/state":
             self._json(200, {"ok": True, "state": self.designer.state()})
         elif route == "/api/image":
             if self.designer.image_path.is_file():

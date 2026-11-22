@@ -133,7 +133,7 @@ class ProcessingPlans:
         change=self.changes.load(change_id,session)
         self.changes.verify(change,baseline=False)
         expected={'digest':change['digest'],'source':'native-user-command'}
-        if change['status']!='applied' or change.get('reloadOutcome')!='succeeded' or change.get('approval')!=expected:
+        if change['status']!='applied' or change.get('reloadOutcome')!='succeeded' or change.get('approval') not in (expected,{'digest':change['digest'],'source':'task-workflow'}):
             raise ValueError('Refresh requires a successfully reloaded, user-authorized applied change set')
         if digest is not None and change['digest']!=digest:
             raise ValueError('Parent change-set authorization changed; restage refresh')

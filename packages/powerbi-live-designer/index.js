@@ -17,13 +17,20 @@
  * over stdio. File authoring still uses the loopback coordinator.
  */
 
+import {jsonTool} from './tool-json.mjs';
 import {registerDesignSkills} from './skills.js';
 import {designBriefSchema, reviewFindingSchema} from './design-contracts.js';
-import {appendFileSync, mkdirSync, openSync, readSync, closeSync, fstatSync, readFileSync, statSync} from 'node:fs';
+import {appendFileSync, mkdirSync, openSync, readSync, closeSync, fstatSync, readFileSync, statSync, writeFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {win32, resolve} from 'node:path';
-import {randomUUID} from 'node:crypto';
-import {listModelTables, refreshModelTables, validateRefreshTables} from './direct-model.mjs';
+import {randomUUID,createHash} from 'node:crypto';
+import {listModelTables, refreshModelTables, validateRefreshTables,verifyScalar,queryModel} from './direct-model.mjs';
+import {TaskStore} from './task-store.mjs';
+import {Workflow} from './workflow.mjs';
+import {prepareProject} from './prepare-project.mjs';
+import {AsyncLocalStorage} from 'node:async_hooks';
+import {projectSnapshot} from './project-snapshot.mjs';
+import {saveVerifiedProject} from './save-project.mjs';
 
 export const name = 'powerbi-live-designer';
 export const inject = ['tools', 'connection', 'agents'];
@@ -35,7 +42,6 @@ const RUN_TIMEOUT_MS = 900000;
 const ARTIFACT_DIR = '.pbi-live-designer';
 const ACTIONS = ['task-status', 'task-performance', 'configure', 'direct-connect', 'direct-refresh', 'status', 'readiness', 'semantic', 'validation', 'journal', 'design-plan', 'design-review', 'plan', 'run', 'capture', 'abort', 'change-stage','change-get','change-pending','change-validate','change-apply','change-reload'];
 const PAGE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
-const V6_DOCUMENTS = ['powerbi_live_designer_v6_reference.html', 'agent_performance_v6_reference.html'];
 
 function readString(value) {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
@@ -92,6 +98,47 @@ export function apply(ctx, config) {
   const agents = ctx.agents;
   const logDirectory = fileURLToPath(new URL('./.runtime/', import.meta.url));
   const logPath = resolve(logDirectory, 'host-operations.jsonl');
+  const taskStore = new TaskStore(config?.taskDirectory ?? resolve(logDirectory,'tasks'));
+  const workflow = new Workflow(taskStore,{
+    normalize:value=>win32.normalize(value).toLowerCase(),
+    prepare:input=>prepareProject(input),
+    resume:async task=>prepareProject({project:task.project,mode:task.mode,resume:true}),
+    async bind(task){
+      if(task.connection&&task.connection.protocol!=='task-tools-v2'){const upgraded=await prepareProject({project:task.project,mode:task.mode,resume:true});task.connection=upgraded.connection;task.capabilities=upgraded.capabilities;taskStore.write(currentWorkflowSession(),task);}
+      tasks.set(currentWorkflowSession(),{mode:task.mode==='new'?'new':'existing',project:task.project,startedAt:task.createdAt});
+      bindings.set(currentWorkflowSession(),{...task.connection,project:task.project});
+    },
+    inspect:()=>dispatch('semantic',{sessionId:currentWorkflowSession()}),
+    plan:value=>dispatch('design-plan',{sessionId:currentWorkflowSession(),value}),
+    stage:value=>changeCall(currentWorkflowSession(),'stage',value),
+    validate:value=>changeCall(currentWorkflowSession(),'validate',value),
+    get:value=>changeCall(currentWorkflowSession(),'get',value),
+    authorize:value=>changeCall(currentWorkflowSession(),'authorize',value),
+    apply:value=>changeCall(currentWorkflowSession(),'apply',value),
+    reload:value=>changeCall(currentWorkflowSession(),'reload',value),
+    stageRefresh:value=>changeCall(currentWorkflowSession(),'processing-stage',value),
+    getRefresh:value=>changeCall(currentWorkflowSession(),'processing-get',value),
+    refresh:value=>changeCall(currentWorkflowSession(),'processing-run',value),
+    query:(task,check)=>verifyScalar(task.project,check),
+    async refreshData(task,tables){await connectDirect(currentWorkflowSession(),task.project);return refreshDirect(currentWorkflowSession(),tables);},
+    readiness:()=>dispatch('readiness',{sessionId:currentWorkflowSession()}),
+    snapshot:task=>projectSnapshot(task.project),
+    save:task=>saveVerifiedProject(task.project,task.verificationSnapshot),
+    async capture(task,page){
+      const result=await opCapture(currentWorkflowSession(),page);
+      const evidence=result.state?.captureEvidence;
+      if(!evidence?.rendererAcknowledged||evidence.pageIdentityVerified!==true||evidence.freshness==='unverified-duplicate-across-pages')throw Error('Capture did not verify the requested page.');
+      const {bytes}=await fetchArtifact(currentWorkflowSession());
+      const hash=createHash('sha256').update(bytes).digest('hex');
+      if(hash!==evidence.sha256)throw Error('Screenshot changed while collecting evidence.');
+      const directory=resolve(taskStore.folder(currentWorkflowSession()),'artifacts');mkdirSync(directory,{recursive:true});
+      const path=resolve(directory,hash+'.png');writeFileSync(path,bytes);
+      return {...evidence,path};
+    },
+  });
+  // AsyncLocalStorage prevents concurrent chats from sharing adapter identity.
+  const workflowSession = new AsyncLocalStorage();
+  function currentWorkflowSession(){const session=workflowSession.getStore();if(!session)throw Error('Missing workflow session');return session;}
   function record(operation, outcome, id, errorType, sessionId, table) {
     mkdirSync(logDirectory, {recursive: true});
     appendFileSync(logPath, JSON.stringify({at: new Date().toISOString(), operation,
@@ -167,7 +214,8 @@ export function apply(ctx, config) {
   function bindingFor(sessionId) {
     let binding = bindings.get(sessionId);
     if (binding === undefined) {
-      binding = { serviceUrl: configuredServiceUrl, project: configuredProject };
+      const saved=taskStore.read(sessionId);
+      binding = saved?.connection ? {...saved.connection,project:saved.project} : { serviceUrl: configuredServiceUrl, project: configuredProject };
       bindings.set(sessionId, binding);
     }
     return binding;
@@ -196,7 +244,7 @@ export function apply(ctx, config) {
     record(path, 'started', operationId, undefined, sessionId);
     const headers = { 'X-PBI-Live-Designer': '1' };
     if(path.startsWith('/api/changes/')) {
-      const tokenFile=config?.controlTokenFile;
+      const tokenFile=binding.controlTokenFile??config?.controlTokenFile;
       if(typeof tokenFile!=='string')throw new Error('Authenticated authoring control channel is not configured');
       const token=readFileSync(tokenFile,'utf8').trim();
       if(!/^[a-f0-9]{64}$/.test(token))throw new Error('Invalid authoring control token');
@@ -364,6 +412,8 @@ export function apply(ctx, config) {
     if(op.startsWith('change-'))return changeCall(sessionId,op.slice(7),body?.value??{});
     switch (op) {
       case 'task-status': {
+        const durable=taskStore.read(sessionId);
+        if(durable)return {ok:true,task:{...workflow.status(sessionId).task,latest:taskEntries(sessionId,{startedAt:durable.createdAt}).at(-1)??null}};
         const task = tasks.get(sessionId);
         if (!task) {
           const editing = bindings.get(sessionId);
@@ -510,28 +560,20 @@ export function apply(ctx, config) {
     return requireSession(exec?.agent?.session?.id ?? exec?.agent?.id);
   }
 
+  const simpleTools = new Set(['pbi_prepare_task','pbi_inspect_task','pbi_prepare_draft','pbi_execute_task','pbi_task_status']);
+  function registerTool(definition) {
+    if(config?.advancedTools !== true && !simpleTools.has(definition.name))return () => {};
+    return ctx.tools.register(jsonTool(definition));
+  }
+
   /** Register the HTTP operations and the agent tools under this plugin's effect. */
   ctx.effect(() => {
     const disposers = [];
-    for (const document of V6_DOCUMENTS) {
-      disposers.push(ctx.connection.fetch.register({
-        path: `/api/pbi-live-designer/previews/${document}`,
-        methods: ['GET'],
-        fetch: () => new Response(readFileSync(new URL(`./previews/${document}`, import.meta.url)), {
-          headers: {
-            'Content-Type': 'text/html; charset=utf-8',
-            'Content-Security-Policy': "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; base-uri 'none'; form-action 'none'",
-            'X-Content-Type-Options': 'nosniff',
-          },
-        }),
-      }));
-
-    }
-    disposers.push(ctx.tools.register({
+    disposers.push(registerTool({
       name:'pbi_start_task',
       description:'Open Power BI Live Designer at task start. Call with the mode before asking for the saved PBIP path, then again with the same mode and the path provided by the user.',
       parameters:{type:'object',additionalProperties:false,required:['mode'],properties:{
-        mode:{enum:['new','existing']},project:{type:'string'},
+        mode:{enum:['new','existing']},savePolicy:{enum:['automatic','manual']},project:{type:'string'},
       }},
       output:toolOutput,
       execute(args, exec) {
@@ -553,14 +595,14 @@ export function apply(ctx, config) {
           'Open your existing .pbip in Power BI Desktop and paste its full path here.'};
       },
     }));
-    disposers.push(ctx.tools.register({
+    disposers.push(registerTool({
       name:'pbi_connect_open_report',
       description:'Connect directly to the exact open Power BI Desktop .pbip project and list its model tables.',
       parameters:{type:'object',additionalProperties:false,required:['project'],properties:{project:{type:'string'}}},
       output:toolOutput,
       execute:(args, exec) => connectDirect(toolSession(exec), args.project),
     }));
-    disposers.push(ctx.tools.register({
+    disposers.push(registerTool({
       name:'pbi_refresh_data',
       description:'Refresh only the named tables in the connected open Power BI project when the user explicitly requests a data refresh. Verify row counts and report outcomes. Use this for existing reports; no file change set, reload, or screenshot is needed.',
       parameters:{type:'object',additionalProperties:false,required:['tables'],properties:{
@@ -580,16 +622,27 @@ export function apply(ctx, config) {
       changeSetId:changeId,tables:{type:'array',minItems:1,maxItems:20,items:{type:'string',minLength:1,maxLength:200}},
       checks:{type:'array',minItems:1,maxItems:20,items:{type:'object',additionalProperties:false,required:['table','minRows','maxRows'],properties:{table:{type:'string'},minRows:{type:'integer',minimum:0},maxRows:{type:'integer',minimum:0,maximum:9007199254740991}}}},
       sourceFiles:{type:'array',maxItems:20,items:{type:'object',additionalProperties:false,required:['path','sha256'],properties:{path:{type:'string'},sha256:digest}}},sourceSummary:{type:'string',minLength:1,maxLength:2000}}};
+    const scalarCheck={type:'object',additionalProperties:false,required:['query','expected'],properties:{query:{type:'string',maxLength:12000},expected:{type:'number'},tolerance:{type:'number',minimum:0}}};
+    const taskTools=[
+      ['pbi_prepare_task','Prepare or resume a durable Power BI task. Automatically discover the exact project and start the coordinator. For new reports provide outputDirectory and reportName. Preserve bundled dashboard design skills. Never accepts credentials, EULA acceptance or approval.',{type:'object',additionalProperties:false,required:['intent'],properties:{intent:{type:'string',maxLength:4000},mode:{enum:['new','existing']},savePolicy:{enum:['automatic','manual']},project:{type:'string'},outputDirectory:{type:'string'},reportName:{type:'string'},sources:{type:'array',maxItems:50,items:{type:'string',maxLength:2000}}}},(session,args)=>workflow.prepare(session,args)],
+      ['pbi_inspect_task','Inspect semantic metadata or execute a bounded read-only EVALUATE query against the exact prepared project. Query rows are not persisted in task journals. Define numerical acceptance checks in the draft.',{type:'object',additionalProperties:false,properties:{query:{type:'string',maxLength:12000},maxRows:{type:'integer',minimum:1,maximum:100}}},async(session,args)=>args.query?queryModel(workflow.required(session).project,args.query,args.maxRows??100):workflow.inspect(session)],
+      ['pbi_prepare_draft','Persist a design plan, stage explicit agent-authored files and validate them in one operation. Follow all four bundled design skills first. Returns the exact validated draft; continue with pbi_execute_task without a sidebar or separate approval.',{type:'object',additionalProperties:false,required:['plan','changes','pages','acceptance'],properties:{revisionOf:digest,plan:designBriefSchema,changes:{type:'object',additionalProperties:false,required:['summary','files'],properties:{summary:stageValue.properties.summary,files:stageValue.properties.files}},pages:{type:'array',minItems:1,maxItems:50,uniqueItems:true,items:{type:'string',pattern:'^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$'}},acceptance:{type:'array',minItems:1,maxItems:50,items:{type:'string',minLength:1,maxLength:1000}},checks:{type:'array',maxItems:20,items:scalarCheck},refresh:{type:'object',additionalProperties:false,required:['tables','checks','sourceFiles','sourceSummary'],properties:Object.fromEntries(Object.entries(processingValue.properties).filter(([key])=>key!=='changeSetId'))}}},(session,args)=>workflow.draft(session,args)],
+      ['pbi_execute_task','Execute the exact validated draft under the user-requested task: checkpoint, apply, reload, affected-table processing, scalar checks and page captures. Resume acknowledged stages without repeating imports. For an explicit data-only refresh use action=refresh_data with named tables, without a draft. After reading each screenshot, call with action=finish and its page/hash/notes review. Finish saves through the exact-PID helper when available and permitted by savePolicy; otherwise it returns awaiting_save.',{type:'object',additionalProperties:false,properties:{action:{enum:['execute','finish','refresh_data']},tables:{type:'array',minItems:1,maxItems:20,uniqueItems:true,items:{type:'string'}},reviews:{type:'array',maxItems:50,items:{type:'object',additionalProperties:false,required:['page','sha256','passed','notes'],properties:{page:{type:'string'},sha256:digest,passed:{type:'boolean'},notes:{type:'string',minLength:1,maxLength:2000}}}}}},(session,args)=>args.action==='finish'?workflow.finish(session,args.reviews??[]):args.action==='refresh_data'?workflow.refreshData(session,args.tables):workflow.execute(session)],
+      ['pbi_task_status','Read durable task context, current steps, evidence and next action after interruption. This never approves, retries, refreshes, reloads or marks work complete.',{type:'object',additionalProperties:false,properties:{}},session=>workflow.status(session)],
+    ];
+    for(const [name,description,parameters,run] of taskTools)disposers.push(registerTool({name,description,parameters,output:toolOutput,execute:(args,exec)=>{
+      const session=toolSession(exec);return workflowSession.run(session,()=>run(session,args));
+    }}));
     for(const [name,operation,description,schema] of [
       ['pbi_stage_model_refresh','processing-stage','Stage affected-table Full refresh after approved definitions were applied and reloaded. Fingerprint live model and local source files, specify expected row-count ranges. No data refresh yet. Inherit authorization from the applied change set; continue directly to pbi_run_model_refresh without another user approval. File rollback cannot restore refreshed rows.',processingValue],
       ['pbi_get_model_refresh','processing-get','Inspect persistent refresh outcome, completed tables and row-count evidence. Unknown/running outcomes must not be retried.',{type:'object',additionalProperties:false,required:['id'],properties:{id:changeId}}],
       ['pbi_run_model_refresh','processing-run','Run exact staged refresh within the parent approved change set. No separate refresh-approval command is required. Refuse changed model/project/source fingerprints; refresh only named tables and verify row counts. No automatic retry or full-model fallback. Row counts do not prove metric correctness.',{type:'object',additionalProperties:false,required:['id','digest'],properties:{id:changeId,digest}}],
       ['pbi_stage_changes','stage','Stage DSH-authored report/model definition text against a saved design plan. No live file changes. Return digest and reviewable diff. File approval also covers routine refresh of the applied unchanged model/source definitions; no second refresh approval. Generic authoring only; never infer file approval.',stageValue],
       ['pbi_get_change_set','get','Read an exact staged change set, validation, approval and diff location.',{type:'object',additionalProperties:false,required:['id'],properties:{id:changeId}}],
-      ['pbi_validate_changes','validate','Validate staged PBIR and deserialize staged TMDL. When actual edits pass validation, direct the user to Power BI sidebar → Review pending changes. For unchanged files and a data-only request, use pbi_connect_open_report and pbi_refresh_data.',{type:'object',additionalProperties:false,required:['id'],properties:{id:changeId}}],
-      ['pbi_apply_changes','apply','Apply an exact validated change set after the user approves it in the Power BI sidebar. Creates a checkpoint; refuses stale files. No automatic model processing.',{type:'object',additionalProperties:false,required:['id','digest'],properties:{id:changeId,digest}}],
+      ['pbi_validate_changes','validate','Validate staged PBIR and deserialize staged TMDL. When actual edits pass validation, continue with pbi_execute_task in chat. For unchanged files and a data-only request, use pbi_connect_open_report and pbi_refresh_data.',{type:'object',additionalProperties:false,required:['id'],properties:{id:changeId}}],
+      ['pbi_apply_changes','apply','Apply an exact validated change set after task workflow authorization. Creates a checkpoint; refuses stale files. No automatic model processing.',{type:'object',additionalProperties:false,required:['id','digest'],properties:{id:changeId,digest}}],
       ['pbi_reload_changes','reload','Reload exact applied report/model definitions into the matching Desktop canvas after unsaved-state checks. Does not refresh model data. A timeout is unknown; inspect before retrying.',{type:'object',additionalProperties:false,required:['id','digest'],properties:{id:changeId,digest}}],
-    ]) disposers.push(ctx.tools.register({name,description,
+    ]) disposers.push(registerTool({name,description,
       parameters:{type:'object',additionalProperties:false,required:['value'],properties:{value:schema}},
       output:toolOutput,execute:(args,exec)=>changeCall(toolSession(exec),operation,args?.value??{})}));
     for (const [name, operation, description] of [
@@ -597,13 +650,13 @@ export function apply(ctx, config) {
       ['pbi_inspect_semantic_model', 'semantic', 'Read local semantic metadata only. No DAX, M, row reads or model changes. Surface partial inventory warnings and ask about missing business definitions.'],
       ['pbi_validate_project', 'validation', 'Read the authoring CLI validation result, diagnostic codes and schema-coverage limitations. This is separate from Desktop readiness and never reloads or edits files.'],
       ['pbi_get_operation_log', 'journal', 'Read recent operation outcomes and persistent journal locations. Unknown outcomes need inspection before retry.'],
-    ]) disposers.push(ctx.tools.register({name, description,
+    ]) disposers.push(registerTool({name, description,
       parameters:{type:'object',additionalProperties:false,properties:{}}, output:toolOutput,
       execute:(_args, exec) => dispatch(operation, {sessionId:toolSession(exec)})}));
     for (const [name, operation, description, valueSchema] of [
       ['pbi_plan_design', 'design-plan', 'Persist a design proposal only, without changing the report. Follow the exact value schema; place proposed bindings in measure/dimension and unresolved decisions in assumptions. Do not add binding or other undeclared keys. Review grain, entity overlap, units, time aggregation, denominators and missing-data handling before saving.', designBriefSchema],
       ['pbi_record_review', 'design-review', 'Record user feedback or an agent finding; never grants execution approval. Follow the exact value schema. Keep credentials and private row data out.', reviewFindingSchema],
-    ]) disposers.push(ctx.tools.register({name, description,
+    ]) disposers.push(registerTool({name, description,
       parameters:{type:'object',additionalProperties:false,required:['value'],properties:{value:valueSchema}},
       output:toolOutput, execute:(args, exec) => dispatch(operation, {sessionId:toolSession(exec),value:args?.value})}));
     for (const op of ACTIONS) {
@@ -621,7 +674,7 @@ export function apply(ctx, config) {
       fetch: (request) => handleArtifact(request),
     }));
 
-    disposers.push(ctx.tools.register({
+    disposers.push(registerTool({
       name: 'pbi_configure',
       description: 'Bind the confirmed .pbip project for report file editing in this session. For data-only refresh, use pbi_connect_open_report instead. No Desktop change.',
       parameters: {
@@ -638,7 +691,7 @@ export function apply(ctx, config) {
       },
     }));
 
-    disposers.push(ctx.tools.register({
+    disposers.push(registerTool({
       name: 'pbi_get_status',
       description: 'Read the Power BI Live Designer report editing state for this Session: bound project, last action, refresh phase, pending plan and whether the model adapter is configured. No Desktop change.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },
@@ -648,7 +701,7 @@ export function apply(ctx, config) {
       },
     }));
 
-    disposers.push(ctx.tools.register({
+    disposers.push(registerTool({
       name: 'pbi_plan_refresh',
       description: 'Build a deterministic smart affected-table refresh plan from an explicit, reviewed change manifest. Planning never changes Desktop state. Returns the one-time planId that pbi_run_approved_refresh requires.',
       parameters: {
@@ -672,7 +725,7 @@ export function apply(ctx, config) {
       },
     }));
 
-    disposers.push(ctx.tools.register({
+    disposers.push(registerTool({
       name: 'pbi_run_approved_refresh',
       description: 'Execute a previously reviewed pbi_plan_refresh plan for this Session. Requires approved=true and the unchanged planId. May reload PBIR/TMDL, process the model, run DAX checks and capture report screenshots in the local Power BI Desktop.',
       parameters: {
@@ -691,7 +744,7 @@ export function apply(ctx, config) {
       },
     }));
 
-    disposers.push(ctx.tools.register({
+    disposers.push(registerTool({
       name: 'pbi_capture_page',
       description: 'Capture a Power BI Desktop report page screenshot and store it as a Session artifact. Capturing does not reload definitions and never discards unsaved Desktop edits.',
       parameters: {
@@ -707,7 +760,7 @@ export function apply(ctx, config) {
       },
     }));
 
-    disposers.push(ctx.tools.register({
+    disposers.push(registerTool({
       name: 'pbi_get_artifact',
       description: 'Save the latest captured Power BI screenshot into the Session workspace and return its file path plus image metadata, so it can be read and visually reviewed. Returns no image bytes.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },
@@ -740,7 +793,7 @@ export function apply(ctx, config) {
       },
     }));
 
-    disposers.push(ctx.tools.register({
+    disposers.push(registerTool({
       name: 'pbi_abort_if_safe',
       description: 'Clear a pending, not-yet-running Power BI refresh plan for this Session. Reports not-safe while an operation is running and never forces a running Desktop operation to stop.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },

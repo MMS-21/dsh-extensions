@@ -224,7 +224,8 @@ class ChangeSets:
         return {key:record[key] for key in ('id','digest','project','planId','summary','files','status','validation','approval')} | {
             'ok':True,'executionScope':'Apply and reload these definitions, then refresh existing model tables and verify row counts without another refresh approval.',
             'diffPath':str(folder/'changes.diff'),'manifestPath':str(folder/'manifest.json'),
-            'stagedProject':str(folder/'project'/self.project.name)}
+            'stagedProject':str(folder/'project'/self.project.name),
+            'reloadOutcome':record.get('reloadOutcome')}
 
     def verify(self, record, baseline=True):
         identity = {key:record[key] for key in ('project','session','planId','summary','files','baseline')}
@@ -261,13 +262,15 @@ class ChangeSets:
             self.journal.append('change-validation','succeeded',changeSetId=change_id,digest=record['digest'])
             return self.describe(record)
 
-    def approve(self, change_id, session, digest):
+    def approve(self, change_id, session, digest, source='native-user-command'):
+        if source not in ('native-user-command','task-workflow'):
+            raise ValueError('Unknown change authorization source')
         with self.lock:
             record = self.load(change_id,session)
             self.verify(record)
             if record['digest'] != digest or record['status'] != 'validated':
                 raise ValueError('Approval requires the exact validated digest')
-            record['approval'] = {'digest':digest,'source':'native-user-command'}
+            record['approval'] = {'digest':digest,'source':source}
             record['status'] = 'approved'
             self.save(record)
             self.journal.append('change-approval','recorded',changeSetId=change_id,digest=digest)
@@ -277,8 +280,8 @@ class ChangeSets:
         with self.lock:
             record = self.load(change_id,session)
             self.verify(record)
-            if record['digest'] != digest or record['status'] != 'approved' or record['approval'] != {'digest':digest,'source':'native-user-command'}:
-                raise ValueError('Exact user approval is required; approved=true is not accepted')
+            if record['digest'] != digest or record['status'] != 'approved' or record.get('approval') not in ({'digest':digest,'source':'native-user-command'},{'digest':digest,'source':'task-workflow'}):
+                raise ValueError('Exact validated change approval or task authorization is required')
             preflight()
             self.verify(record)
             folder = self.directory/change_id
