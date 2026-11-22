@@ -20,6 +20,7 @@
     "icon.svg",
     "README.md",
     "previews/*.html",
+    "previews/live.js",
     "skills.js",
     "skills/**",
     "SKILLS-SOURCE.md",

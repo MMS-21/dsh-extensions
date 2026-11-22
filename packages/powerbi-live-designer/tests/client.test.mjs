@@ -18,7 +18,7 @@ function fixture({mounted, fetchTask = async () => ({task:null})} = {}) {
       const index=cursor++;
       if (!(index in state)) state[index]=value;
       return [state[index],next=>{state[index]=next;}];
-    },useEffect:fn=>effects.push(fn),useCallback:fn=>fn};
+    },useEffect:fn=>effects.push(fn),useRef:()=>({current:null})};
   vm.runInNewContext(readFileSync(new URL('../client.js',import.meta.url),'utf8'), {
     window:{__ModuleLoader__:{load(definition){plugin=definition.factory(()=>react);}}},
     AbortSignal, AbortController,
@@ -62,48 +62,11 @@ test('the right sidebar launcher opens Power BI in the active session', () => {
   assert.deepEqual(getOpened(),{kind:tab.kind,target});
 });
 
-test('sidebar shows setup first, then reveals tools for the confirmed project', async () => {
-  const {Body,effects}=fixture({fetchTask:async ()=>({task:{project:'C:\\BI\\Sales.pbip'}})});
-  function render() {
-    const all=[];
-    function walk(node){if(!node||typeof node!=='object')return;all.push(node);for(const child of node.children??[])Array.isArray(child)?child.forEach(walk):walk(child);}
-    walk(Body({sessionId:'native-session'}));
-    return all;
-  }
-  const button=(view,label)=>view.find(node=>node.type==='button'&&node.children.includes(label));
-  const designer=render();
-  const designerFrame=designer.find(node=>node.type==='iframe');
-  assert.match(designerFrame.props.src,/powerbi_live_designer_v6_reference\.html$/);
-  assert.equal(designerFrame.props.sandbox,'allow-scripts');
-  button(designer,'Agent Performance v6').props.onClick();
-  const performance=render();
-  assert.match(performance.find(node=>node.type==='iframe').props.src,/agent_performance_v6_reference\.html$/);
-  button(performance,'Live report controls').props.onClick();
-  const setup=render();
-  assert.ok(setup.some(node=>node.children.includes('Start with a saved Power BI project')));
-  assert.equal(button(setup,'Refresh data'),undefined);
-  assert.equal(setup.some(node=>node.type==='input'),false);
-  const stop=effects[0]();
-  await new Promise(resolve=>setImmediate(resolve));
-  const overview=render();
-  assert.equal(button(overview,'Overview').props['aria-current'],'page');
-  assert.ok(overview.some(node=>node.children.includes('C:\\BI\\Sales.pbip')));
-  assert.ok(overview.some(node=>node.children.includes('Development status')));
-  assert.equal(overview.some(node=>node.children.includes('Agent Performance')),false);
-  assert.equal(overview.some(node=>node.type==='input'),false);
-  button(overview,'Refresh data').props.onClick();
-  const refresh=render();
-  assert.equal(button(refresh,'Refresh data').props['aria-current'],'page');
-  assert.ok(button(refresh,'Connect to open report'));
-  assert.equal(button(refresh,'runPlan'),undefined);
-  button(refresh,'Change review').props.onClick();
-  const review=render();
-  assert.ok(button(review,'Review pending changes'));
-  assert.equal(button(review,'Refresh selected tables'),undefined);
-  button(review,'Semantic model').props.onClick();
-  const model=render();
-  assert.ok(button(model,'inspect'));
-  button(model,'Operation journal').props.onClick();
-  assert.ok(render().some(node=>node.type==='summary'&&node.children.includes('Agent Performance')));
-  stop();
+test('the sidebar opens one live designer view for the current chat', () => {
+  const {Body}=fixture();
+  const frame=Body({sessionId:'native-session'});
+  assert.equal(frame.type,'iframe');
+  assert.match(frame.props.src,/live\/powerbi_live_designer_v6_reference\.html$/);
+  assert.equal(frame.props.sandbox,'allow-scripts');
+  assert.equal(Body({}).type,'p');
 });

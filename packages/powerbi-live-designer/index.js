@@ -63,7 +63,7 @@ function summarizeActivity(entries) {
   }
   const rows = [...operations.values()].map(({operation, startedAt, outcome, lastEventAt}) => {
     outcomes[outcome] = (outcomes[outcome] ?? 0) + 1;
-    return {operation, startedAt, outcome,
+    return {operation, startedAt, lastEventAt, outcome,
       observedDurationMs:startedAt ? Date.parse(lastEventAt) - Date.parse(startedAt) : null};
   });
   return {eventCount:entries.length, operationCount:rows.length, outcomes, tablesRefreshed, operations:rows};
@@ -365,14 +365,18 @@ export function apply(ctx, config) {
     switch (op) {
       case 'task-status': {
         const task = tasks.get(sessionId);
-        if (!task) return {ok:true, task:null};
+        if (!task) {
+          const editing = bindings.get(sessionId);
+          const project = directProjects.get(sessionId) ?? (editing?.readiness ? editing.project : null);
+          return {ok:true, task:project ? {project, latest:null} : null};
+        }
         const project = task.project ?? null;
         const entries = taskEntries(sessionId, task);
         return {ok:true, task:{...task, project, latest:entries.at(-1) ?? null}};
       }
       case 'task-performance': {
         const task = tasks.get(sessionId);
-        return {ok:true, activity:task ? summarizeActivity(taskEntries(sessionId, task)) : null};
+        return {ok:true, activity:summarizeActivity(taskEntries(sessionId, task ?? {startedAt:''}))};
       }
       case 'direct-connect':
         return connectDirect(sessionId, body.project);
@@ -520,6 +524,24 @@ export function apply(ctx, config) {
             'X-Content-Type-Options': 'nosniff',
           },
         }),
+      }));
+      disposers.push(ctx.connection.fetch.register({
+        path: `/api/pbi-live-designer/live/${document}`,
+        methods: ['GET'],
+        fetch: () => {
+          const preview = readFileSync(new URL(`./previews/${document}`, import.meta.url), 'utf8');
+          const scriptStart = preview.lastIndexOf('<script>');
+          const scriptEnd = preview.indexOf('</script>', scriptStart);
+          const bridge = readFileSync(new URL('./previews/live.js', import.meta.url), 'utf8');
+          if (scriptStart < 0 || scriptEnd < scriptStart) throw Error('The v6 document has no application script.');
+          const page = preview.slice(0, scriptStart) + '<script>' + bridge.replaceAll('</script','<\\/script') +
+            preview.slice(scriptEnd);
+          return new Response(page, {headers:{
+            'Content-Type':'text/html; charset=utf-8',
+            'Content-Security-Policy':"sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: blob:; base-uri 'none'; form-action 'none'",
+            'X-Content-Type-Options':'nosniff',
+          }});
+        },
       }));
     }
     disposers.push(ctx.tools.register({
