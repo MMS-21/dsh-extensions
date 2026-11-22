@@ -20,7 +20,8 @@ window.__ModuleLoader__.load({
     const h = React.createElement;
     const { useState, useEffect, useCallback } = React;
 
-    const TYPE_ID = "@local/dsh-plugin-powerbi-live-designer";
+    const MODULE_ID = "@local/dsh-plugin-powerbi-live-designer";
+    const TAB_KIND = "powerbi-live-designer";
     const NAMESPACE = "powerbiLiveDesigner";
     const DEFAULT_SERVICE_URL = "http://127.0.0.1:8765";
     const API_BASE = "/api/pbi-live-designer/";
@@ -225,8 +226,7 @@ window.__ModuleLoader__.load({
 
     function makeBody(t, getCommands) {
       function Body(props) {
-        const session = props.useSession?.();
-        const sessionId = props.sessionId ?? session?.id;
+        const {sessionId} = props;
         const [busy, setBusy] = useState(false);
         const [state, setState] = useState(null);
         const [message, setMessage] = useState("");
@@ -670,11 +670,11 @@ window.__ModuleLoader__.load({
       }), "powerbi-live-designer.copy");
 
       ctx.effect(() => ctx.sidebarRightTabs.register({
-        id: TYPE_ID,
-        kind: "powerbi-live-designer",
+        id: TAB_KIND,
+        kind: TAB_KIND,
         title: () => t("type.label"),
         guide: [{
-          id: TYPE_ID,
+          id: TAB_KIND,
           commandId: "powerbi-live-designer.open",
           order: 30,
           title: () => t("guide.title"),
@@ -692,24 +692,24 @@ window.__ModuleLoader__.load({
         resolve: ({target: element}) => {
           const target = ctx.sidebarRight.commandTarget(element);
           if (target === undefined) return {status: "blocked", reason: t("noSession")};
-          return {status: "handled", run: () => ctx.sidebarRight.openTabFromTarget(TYPE_ID, target)};
+          return {status: "handled", run: () => ctx.sidebarRight.openTabFromTarget(TAB_KIND, target)};
         }
       }), "powerbi-live-designer.open");
 
       ctx.effect(() => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
         name: "sidebar.right.pane.tab",
-        key: TYPE_ID,
+        key: TAB_KIND,
         locale: NAMESPACE
       }, makeBody(t, () => ctx.get("remote.commands") ?? ctx.get("remote")?.commands))), "powerbi-live-designer.body");
 
       ctx.effect(() => ctx.slots.inject("sidebar.right.pane.tab.title", () => ctx.slots.register({
         name: "sidebar.right.pane.tab.title",
-        key: TYPE_ID,
+        key: TAB_KIND,
         locale: NAMESPACE
       }, Title)), "powerbi-live-designer.title");
     }
 
-    exports.name = TYPE_ID;
+    exports.name = MODULE_ID;
     exports.inject = ["slots", "locale", "sidebarRightTabs", "sidebarRight", "shortcuts"];
     exports.apply = apply;
 

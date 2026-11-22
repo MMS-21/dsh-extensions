@@ -18,7 +18,10 @@ function fixture() {
   plugin.apply({locale:{bind:()=>key=>key,register:()=>()=>{}},
     effect:fn=>fn(),sidebarRightTabs:{register:value=>{tab=value;return()=>{};}},
     shortcuts:{register:value=>{shortcut=value;return()=>{};}},
-    sidebarRight:{commandTarget:element=>element,openTabFromTarget:(id,target)=>{opened={id,target};}},
+    sidebarRight:{commandTarget:element=>element,openTabFromTarget:(kind,target)=>{
+      assert.equal(kind,tab.kind);
+      opened={kind,target};
+    }},
     slots:{inject:(_name,fn)=>fn(),register:(options,component)=>{if(options.name==='sidebar.right.pane.tab')Body=component;return()=>{};}}});
   return {Body, tab, shortcut, getOpened:()=>opened};
 }
@@ -31,12 +34,12 @@ test('the right sidebar launcher opens Power BI in the active session', () => {
   const action=shortcut.resolve({target});
   assert.equal(action.status,'handled');
   action.run();
-  assert.deepEqual(getOpened(),{id:tab.id,target});
+  assert.deepEqual(getOpened(),{kind:tab.kind,target});
 });
 
-test('sidebar uses the native session hook and keeps writes disabled before verification', () => {
+test('sidebar renders using the session ID supplied by the pane', () => {
   const {Body}=fixture();
-  const view=Body({useSession:()=>({id:'native-session'})});
+  const view=Body({sessionId:'native-session',useSession:selector=>selector({id:'native-session'})});
   const all=[];
   function walk(node){if(!node||typeof node!=='object')return;all.push(node);for(const child of node.children??[])Array.isArray(child)?child.forEach(walk):walk(child);}
   walk(view);
