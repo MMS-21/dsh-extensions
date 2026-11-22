@@ -270,6 +270,7 @@ window.__ModuleLoader__.load({
         const [directState, setDirectState] = useState(null);
         const [directBusy, setDirectBusy] = useState(false);
         const [taskState, setTaskState] = useState(null);
+        const [view, setView] = useState("overview");
         const task = taskState?.sessionId === sessionId ? taskState.task : null;
         const direct = directState?.sessionId === sessionId ? directState : null;
 
@@ -523,17 +524,34 @@ window.__ModuleLoader__.load({
             h("span", { style: { ...css.pill, ...(busy || directBusy ? css.pillBusy : null) } },
               busy || directBusy ? t("working") : direct?.project ? "Connected to Power BI" : t(connectionReady ? "ready" : "disconnected"))
           ),
+          h("style", null, `.pbi-designer-nav button:focus-visible {
+            outline: 2px solid var(--dsw-alias-label-primary, currentColor);
+            outline-offset: 2px;
+          }`),
+          h('nav', {className:'pbi-designer-nav', style:{...css.row,gap:4}, 'aria-label':'Power BI workspace'},
+            ...Object.entries({
+              overview:'Overview', refresh:'Refresh data', review:'Change review',
+              model:'Semantic model', journal:'Operation journal', evidence:'Evidence',
+            }).map(([id,label])=>h('button', {
+              key:id,type:'button','aria-current':view === id ? 'page' : undefined,
+              onClick:()=>setView(id),
+              style:{...css.button,borderColor:'transparent',background:view === id
+                ? 'var(--dsw-alias-fill-secondary, ButtonFace)' : 'transparent'},
+            },label)),
+          ),
           overview,
-          h(
+          message && h('p', {role:'status',style:css.meta}, message),
+          view === 'overview' && h(
             "div",
             { style: css.card },
             h("div", { style: css.row },
               h("div", { style: { flex: "1 1 220px" } },
-                h("label", { style: css.label }, t("project.label")),
+                h("label", { style: css.label }, t("project.label"),
                 h("input", {
                   style: css.input, value: project, placeholder: "C:\\BI\\Sales\\Sales.pbip",
+                  readOnly: Boolean(task?.project),
                   onChange: (event) => setProject(event.target.value)
-                })
+                }))
               ),
               h("div", { style: { flex: "1 1 160px" } },
                 h("label", { style: css.label }, t("service.label")),
@@ -549,19 +567,6 @@ window.__ModuleLoader__.load({
                 }, t("connect"))
               )
             ),
-            h("div", { style: { ...css.row, marginTop: 8 } },
-              h("div", { style: { flex: "1 1 160px" } },
-                h("label", { style: css.label }, t("page.label")),
-                h("input", { style: css.input, value: pageId, onChange: (event) => setPageId(event.target.value) })
-              ),
-              h("div", { style: { flex: "0 0 auto", alignSelf: "flex-end", display: "flex", gap: 6, flexWrap: "wrap" } },
-                h("button", { type: "button", style: css.button, disabled: busy, onClick: connect }, t("status")),
-                h("button", { type: "button", style: css.button, disabled: busy, onClick: inspect }, t("inspect")),
-                h("button", { type: "button", style: css.button, disabled: busy, onClick: readJournal }, t("journal")),
-                h("button", { type: "button", style: css.button, disabled: busy, onClick: capture }, t("capture")),
-                h("button", { type: "button", style: { ...css.button, ...css.warn }, disabled: busy, onClick: abort }, t("abort"))
-              )
-            ),
             h("div", { style: { ...css.meta, marginTop: 8 } },
               t("phase") + ": " + String(phase) +
               "  ·  " + t("lastAction") + ": " + String(state?.lastAction ?? "none") +
@@ -569,11 +574,11 @@ window.__ModuleLoader__.load({
             ),
             connectionChecks ? h('div', {style:css.meta}, t('connectionChecks') + ': ' +
               Object.entries(connectionChecks).map(([key,value]) => t(key) + ': ' + String(value ?? 'unknown')).join(' · ')) : null,
-            message === "" ? null : h("div", { role:'status', style: { ...css.meta, color: "var(--dsw-alias-label-tertiary, GrayText)" } }, message)
+            h("button", {type:"button",style:css.button,disabled:busy,onClick:abort}, t("abort"))
           ),
-          h('section', {style:css.card, 'aria-label':'Refresh Power BI data'},
+          view === 'refresh' && h('section', {style:css.card, 'aria-label':'Refresh Power BI data'},
             h('h4', {style:css.cardTitle}, 'Refresh data'),
-            h('p', {style:css.hint}, 'Enter the open .pbip path above. Select the tables you want to reload from their data sources.'),
+            h('p', {style:css.hint}, 'Use the project confirmed in chat or enter its .pbip path in Overview. Then select the tables to refresh.'),
             h('button', {type:'button', style:css.button, disabled:directBusy || !sessionId || !project.trim(), onClick:connectOpenReport},
               'Connect to open report'),
             direct?.project && h('div', null,
@@ -605,7 +610,7 @@ window.__ModuleLoader__.load({
             direct?.result?.observations?.length > 0 && h('ul', null,
               ...direct.result.observations.map(row => h('li', {key:row.table}, `${row.table} · ${row.rowCount.toLocaleString()} rows`))),
           ),
-          h('section', {style:css.card, 'aria-label':'Review Power BI changes'},
+          view === 'review' && h('section', {style:css.card, 'aria-label':'Review Power BI changes'},
             h('h4', {style:css.cardTitle}, 'Review changes'),
             h('p', {style:css.hint}, 'Review the report or model edits before the agent applies them.'),
             h('button', {type:'button', style:css.button, disabled:reviewBusy || !sessionId, onClick:reviewChanges},
@@ -618,7 +623,7 @@ window.__ModuleLoader__.load({
               h('p', {style:css.meta}, review.change.project),
               h('p', null, review.change.summary),
               !review.change.changedFiles.length
-                ? h('p', {role:'status'}, 'The files are unchanged. Use Refresh data above to load rows into the open model.')
+                ? h('p', {role:'status'}, 'The files are unchanged. Use Refresh data to load rows into the open model.')
                 : h('div', null,
                   h('ul', null, ...review.change.changedFiles.map(file => h('li', {key:file}, file))),
                   typeof review.change.reviewDiff === 'string' && review.change.reviewDiff
@@ -632,19 +637,30 @@ window.__ModuleLoader__.load({
                 ),
             ),
           ),
-          inspection ? h('details', {open:true}, h('summary', null, t('inspection')),
+          view === 'model' && h('section', {style:css.card},
+            h('h4', {style:css.cardTitle}, 'Model explorer'),
+            h('button', {type:'button',style:css.button,disabled:busy,onClick:inspect},t('inspect')),
+          ),
+          view === 'model' && inspection ? h('details', {open:true}, h('summary', null, t('inspection')),
             h('pre', {style:css.plan}, JSON.stringify({source:inspection.source,
               tables:inspection.tables?.map(table => ({name:table.name,columns:table.columns?.map(c=>c.name),measures:table.measures?.map(m=>m.name)})),
               relationships:inspection.relationships, warnings:inspection.warnings, limitations:inspection.limitations}, null, 2))) : null,
-          journal ? h('details', {open:true}, h('summary', null, t('journal')),
+          view === 'journal' && h('section', {style:css.card},
+            h('h4', {style:css.cardTitle}, t('journal')),
+            h('button', {type:'button',style:css.button,disabled:busy,onClick:readJournal},'Read operations'),
+          ),
+          view === 'journal' && journal ? h('details', {open:true}, h('summary', null, t('journal')),
             h('div', {style:css.meta}, journal.journalPath),
             h('div', {style:css.meta}, journal.hostJournalPath),
             journal.error ? h('p', {role:'status',style:css.meta}, journal.error) : null,
             h('pre', {style:css.plan}, JSON.stringify({reportOperations:journal.entries,host:journal.hostEntries}, null, 2))) : null,
-          h(
-            "details",
-            null,
-            h("summary", null, t("evidence")),
+          view === 'evidence' && h(
+            "section",
+            {style:css.card},
+            h("h4", {style:css.cardTitle}, t("evidence")),
+            h("label", {style:css.label}, t("page.label"),
+              h("input", {style:css.input,value:pageId,onChange:event=>setPageId(event.target.value)})),
+            h("button", {type:"button",style:css.button,disabled:busy,onClick:capture}, t("capture")),
             h("div", { style: css.shot },
             shotUrl === null
               ? h("div", { style: css.empty }, t("noShot"))
@@ -655,10 +671,10 @@ window.__ModuleLoader__.load({
                   onError: () => setShotFailed(true)
                 }))
           ),
-          h(
-            "div",
+          view === 'refresh' && h(
+            "details",
             { style: css.card },
-            h("h4", { style: css.cardTitle }, t("plan.title")),
+            h("summary", { style: css.cardTitle }, t("plan.title")),
             h("p", { style: css.hint }, t("plan.policy")),
             h("div", { style: { marginTop: 8 } },
               h("label", { style: css.label }, t("changeKind")),

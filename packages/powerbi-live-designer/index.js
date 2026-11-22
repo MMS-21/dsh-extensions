@@ -33,7 +33,7 @@ const STATUS_TIMEOUT_MS = 30000;
 const ACTION_TIMEOUT_MS = 120000;
 const RUN_TIMEOUT_MS = 900000;
 const ARTIFACT_DIR = '.pbi-live-designer';
-const ACTIONS = ['task-status', 'configure', 'direct-connect', 'direct-refresh', 'status', 'readiness', 'semantic', 'validation', 'journal', 'design-plan', 'design-review', 'plan', 'run', 'capture', 'abort', 'change-stage','change-get','change-pending','change-validate','change-apply','change-reload'];
+const ACTIONS = ['task-status', 'task-performance', 'configure', 'direct-connect', 'direct-refresh', 'status', 'readiness', 'semantic', 'validation', 'journal', 'design-plan', 'design-review', 'plan', 'run', 'capture', 'abort', 'change-stage','change-get','change-pending','change-validate','change-apply','change-reload'];
 const PAGE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
 
 function readString(value) {
@@ -42,6 +42,30 @@ function readString(value) {
 
 function jsonResponse(value, status = 200) {
   return Response.json(value, { status });
+}
+
+function summarizeActivity(entries) {
+  const operations = new Map();
+  for (const entry of entries) {
+    const operation = operations.get(entry.operationId);
+    operations.set(entry.operationId, {
+      operation:entry.operation,
+      startedAt:operation?.startedAt ?? (['started','dispatch'].includes(entry.outcome) ? entry.at : null),
+      outcome:entry.outcome,
+      lastEventAt:entry.at,
+    });
+  }
+  const outcomes = {};
+  let tablesRefreshed = 0;
+  for (const entry of entries) {
+    if (entry.operation === 'direct-refresh' && entry.outcome === 'refreshed') tablesRefreshed++;
+  }
+  const rows = [...operations.values()].map(({operation, startedAt, outcome, lastEventAt}) => {
+    outcomes[outcome] = (outcomes[outcome] ?? 0) + 1;
+    return {operation, startedAt, outcome,
+      observedDurationMs:startedAt ? Date.parse(lastEventAt) - Date.parse(startedAt) : null};
+  });
+  return {eventCount:entries.length, operationCount:rows.length, outcomes, tablesRefreshed, operations:rows};
 }
 
 function pngSize(bytes) {
@@ -87,6 +111,11 @@ export function apply(ctx, config) {
       if (error.code === 'ENOENT') return [];
       throw error;
     } finally { if (fd !== undefined) closeSync(fd); }
+  }
+
+  function taskEntries(sessionId, task) {
+    return hostEntries(sessionId).filter(entry =>
+      entry.at >= task.startedAt && !/\/(state|status|readiness|journal|pending)$/.test(entry.operation));
   }
   function checkedUrl(value) {
     const url = new URL(value);
@@ -337,11 +366,12 @@ export function apply(ctx, config) {
         const task = tasks.get(sessionId);
         if (!task) return {ok:true, task:null};
         const project = task.project ?? null;
-        const entries = hostEntries(sessionId).filter(entry =>
-          entry.at >= task.startedAt && !/\/(status|readiness|journal|pending)$/.test(entry.operation));
-        return {ok:true, task:{...task, project, latest:entries.at(-1) ?? null},
-          activity:{completed:entries.filter(entry => ['succeeded','verified'].includes(entry.outcome)).length,
-            blocked:entries.filter(entry => ['blocked','failed','unknown'].includes(entry.outcome)).length}};
+        const entries = taskEntries(sessionId, task);
+        return {ok:true, task:{...task, project, latest:entries.at(-1) ?? null}};
+      }
+      case 'task-performance': {
+        const task = tasks.get(sessionId);
+        return {ok:true, activity:task ? summarizeActivity(taskEntries(sessionId, task)) : null};
       }
       case 'direct-connect':
         return connectDirect(sessionId, body.project);

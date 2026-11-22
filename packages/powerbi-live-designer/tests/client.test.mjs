@@ -10,8 +10,14 @@ function fixture({mounted, fetchTask = async () => ({task:null})} = {}) {
   let shortcut;
   let opened;
   let poll;
+  let cursor = 0;
+  const state = [];
   const react = {createElement:(type,props,...children)=>({type,props:props??{},children}),
-    useState:value=>[value,()=>{}],useEffect:()=>{},useCallback:fn=>fn};
+    useState(value){
+      const index=cursor++;
+      if (!(index in state)) state[index]=value;
+      return [state[index],next=>{state[index]=next;}];
+    },useEffect:()=>{},useCallback:fn=>fn};
   vm.runInNewContext(readFileSync(new URL('../client.js',import.meta.url),'utf8'), {
     window:{__ModuleLoader__:{load(definition){plugin=definition.factory(()=>react);}}},
     AbortSignal, AbortController,
@@ -29,7 +35,7 @@ function fixture({mounted, fetchTask = async () => ({task:null})} = {}) {
       opened={kind,target};
     }},
     slots:{inject:(_name,fn)=>fn(),register:(options,component)=>{if(options.name==='sidebar.right.pane.tab')Body=component;return()=>{};}}});
-  return {Body, tab, shortcut, getOpened:()=>opened, poll:()=>poll()};
+  return {Body:props=>{cursor=0;return Body(props);}, tab, shortcut, getOpened:()=>opened, poll:()=>poll()};
 }
 
 test('a task opens the designer only for the chat still on screen', async () => {
@@ -57,13 +63,25 @@ test('the right sidebar launcher opens Power BI in the active session', () => {
 
 test('sidebar renders using the session ID supplied by the pane', () => {
   const {Body}=fixture();
-  const view=Body({sessionId:'native-session',useSession:selector=>selector({id:'native-session'})});
-  const all=[];
-  function walk(node){if(!node||typeof node!=='object')return;all.push(node);for(const child of node.children??[])Array.isArray(child)?child.forEach(walk):walk(child);}
-  walk(view);
-  const runButton=all.find(node=>node.type==='button'&&node.children.includes('runPlan'));
+  function render() {
+    const all=[];
+    function walk(node){if(!node||typeof node!=='object')return;all.push(node);for(const child of node.children??[])Array.isArray(child)?child.forEach(walk):walk(child);}
+    walk(Body({sessionId:'native-session'}));
+    return all;
+  }
+  const button=(view,label)=>view.find(node=>node.type==='button'&&node.children.includes(label));
+  const overview=render();
+  assert.equal(button(overview,'Overview').props['aria-current'],'page');
+  assert.ok(overview.some(node=>node.children.includes('disconnected')));
+  button(overview,'Refresh data').props.onClick();
+  const refresh=render();
+  assert.equal(button(refresh,'Refresh data').props['aria-current'],'page');
+  const runButton=button(refresh,'runPlan');
   assert.equal(runButton.props.disabled,true);
-  assert.ok(all.some(node=>node.children.includes('disconnected')));
-  assert.ok(all.some(node=>node.type==='summary'&&node.children.includes('evidence')));
-  assert.ok(all.some(node=>node.type==='button'&&node.children.includes('inspect')));
+  button(refresh,'Change review').props.onClick();
+  const review=render();
+  assert.ok(button(review,'Review pending changes'));
+  assert.equal(button(review,'Refresh selected tables'),undefined);
+  button(review,'Semantic model').props.onClick();
+  assert.ok(button(render(),'inspect'));
 });

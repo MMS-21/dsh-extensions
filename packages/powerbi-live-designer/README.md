@@ -4,6 +4,18 @@ This DSH bundle verifies a local coordinator and the exact PBIP project, inspect
 
 ## Start
 
+For a new report, open Power BI Desktop, save a new Power BI Project
+(`.pbip`), and paste its full path into the DSH chat. For an existing
+report, open its `.pbip` and paste that path. Power BI Live Designer opens
+with the project setup and then shows progress in Overview. Use a separate
+chat for each project.
+
+The live pane uses the v6 navigation for Overview, Refresh data, Change
+review, Semantic model, Operation journal, and Evidence. Agent Performance
+stays in the background. Its task activity endpoint summarizes observed
+Power BI operations and table refreshes from the recent session journal.
+It has no token, cost, or global agent activity source.
+
 ### Refresh an existing report
 
 Open the exact `.pbip` in Power BI Desktop and enter its path in the DSH
