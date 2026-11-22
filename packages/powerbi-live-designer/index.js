@@ -534,11 +534,12 @@ export function apply(ctx, config) {
           const scriptEnd = preview.indexOf('</script>', scriptStart);
           const bridge = readFileSync(new URL('./previews/live.js', import.meta.url), 'utf8');
           if (scriptStart < 0 || scriptEnd < scriptStart) throw Error('The v6 document has no application script.');
-          const page = preview.slice(0, scriptStart) + '<script>' + bridge.replaceAll('</script','<\\/script') +
-            preview.slice(scriptEnd);
+          const policy = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: blob:; base-uri 'none'; form-action 'none'";
+          const page = (preview.slice(0, scriptStart) + '<script>' + bridge.replaceAll('</script','<\\/script') +
+            preview.slice(scriptEnd)).replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="${policy}">`);
           return new Response(page, {headers:{
             'Content-Type':'text/html; charset=utf-8',
-            'Content-Security-Policy':"sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: blob:; base-uri 'none'; form-action 'none'",
+            'Content-Security-Policy':"sandbox allow-scripts; " + policy,
             'X-Content-Type-Options':'nosniff',
           }});
         },

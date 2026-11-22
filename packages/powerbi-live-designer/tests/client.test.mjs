@@ -62,11 +62,12 @@ test('the right sidebar launcher opens Power BI in the active session', () => {
   assert.deepEqual(getOpened(),{kind:tab.kind,target});
 });
 
-test('the sidebar opens one live designer view for the current chat', () => {
+test('the sidebar offers native review before the v6 document is ready', () => {
   const {Body}=fixture();
-  const frame=Body({sessionId:'native-session'});
-  assert.equal(frame.type,'iframe');
-  assert.match(frame.props.src,/live\/powerbi_live_designer_v6_reference\.html$/);
-  assert.equal(frame.props.sandbox,'allow-scripts');
+  const pane=Body({sessionId:'native-session'});
+  const review=pane.children[0];
+  assert.equal(review.type,'section');
+  assert.ok(review.children.some(child=>child?.type==='button'&&child.children.includes('Review pending changes')));
+  assert.equal(pane.children.some(child=>child?.type==='iframe'),false);
   assert.equal(Body({}).type,'p');
 });

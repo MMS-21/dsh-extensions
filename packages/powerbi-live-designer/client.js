@@ -32,6 +32,13 @@ window.__ModuleLoader__.load({
       return function Body({sessionId}) {
         const iframe = useRef(null);
         const [surface, setSurface] = useState("designer");
+        const [load, setLoad] = useState(null);
+        const [review, setReview] = useState(null);
+        const [attempt, setAttempt] = useState(0);
+        const scope = JSON.stringify([sessionId,surface,attempt]);
+        const page = load?.scope === scope ? load : null;
+        const manual = review?.scope === scope ? review : null;
+        const [title, document] = documents[surface];
         useEffect(() => {
           if (!sessionId) return;
           let active = true;
@@ -99,25 +106,85 @@ window.__ModuleLoader__.load({
             const request = event.data;
             if (event.origin !== "null" || event.source !== iframe.current?.contentWindow ||
                 request?.channel !== "pbi-v6-request" || !Number.isSafeInteger(request.id)) return;
+            clearTimeout(deadline);
+            setLoad(current => current?.scope === scope ? {...current,ready:true,error:null} : current);
             let reply;
             try { reply = {value:await dispatch(request.op, request.value)}; }
             catch (error) { reply = {error:error.message}; }
             if (active) event.source.postMessage({channel:"pbi-v6-response",id:request.id,...reply},"*");
           }
           window.addEventListener("message",onMessage);
+          const deadline = setTimeout(() => {
+            setLoad({scope,error:"The v6 display did not start. You can still review pending changes below."});
+          },8000);
+          async function loadPage() {
+            try {
+              const response = await fetch(API_BASE+"live/"+document,{signal:controller.signal});
+              const html = await response.text();
+              if (!response.ok || !html.includes("pbi-v6-request")) throw Error("The v6 document could not be loaded.");
+              if (active) setLoad({scope,src:"data:text/html;charset=utf-8," + encodeURIComponent(html)});
+            } catch (error) {
+              clearTimeout(deadline);
+              if (active) setLoad({scope,error:error.message});
+            }
+          }
+          loadPage();
           return () => {
             active = false;
+            clearTimeout(deadline);
             window.removeEventListener("message",onMessage);
             controller.abort();
           };
-        }, [sessionId,surface]);
+        }, [sessionId,surface,attempt]);
+
+        async function reviewPending() {
+          setReview({scope,busy:true});
+          try {
+            const response = await fetch(API_BASE+"change-pending", {
+              method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({sessionId}),
+            });
+            const result = await response.json();
+            if (!response.ok || result.ok === false) throw Error(result.error || "Could not load pending changes.");
+            setReview({scope,change:result.change});
+          } catch (error) { setReview({scope,error:error.message}); }
+        }
+
+        async function approvePending(change) {
+          setReview({scope,change,busy:true});
+          try {
+            const response = await getCommands()?.execute(sessionId,`/pbi approve ${change.id} ${change.digest}`,[]);
+            const result = response?.value?.result;
+            if (!response?.ok || result?.kind !== "success") {
+              throw Error(result?.text ?? response?.error?.message ?? "DSH approval is unavailable.");
+            }
+            setReview({scope,approved:true});
+          } catch (error) { setReview({scope,change,error:error.message}); }
+        }
 
         if (!sessionId) return h("p", null, "Open a DSH chat to use Power BI Live Designer.");
-        const [title, document] = documents[surface];
-        return h("iframe", {
-          ref:iframe,key:sessionId + surface,title,src:API_BASE+"live/"+document,sandbox:"allow-scripts",
-          style:{display:"block",width:"100%",height:"100%",minHeight:360,border:0},
-        });
+        const change = manual?.change;
+        return h("div",{style:{height:"100%",position:"relative",display:"flex",flexDirection:"column"}},
+          (!page?.ready || manual) && h("section",{style:{padding:16}},
+            h("strong",null,title),
+            h("p",{role:"status"},page?.error || (page?.ready ? "Review pending file changes" : "Loading workspace…")),
+            page?.error && h("button",{type:"button",onClick:()=>setAttempt(attempt+1)},"Retry workspace"),
+            h("button",{type:"button",disabled:manual?.busy,onClick:reviewPending},"Review pending changes"),
+            manual?.error && h("p",{role:"alert"},manual.error),
+            manual?.approved && h("p",{role:"status"},"Changes approved. The agent can continue."),
+            manual && !manual.busy && !manual.error && !manual.approved && !change &&
+              h("p",{role:"status"},"No file edits are waiting for approval."),
+            change && h("div",null,h("p",null,change.project),h("p",null,change.summary),
+              change.reviewDiff && h("pre",{tabIndex:0,style:{maxHeight:360,overflow:"auto",whiteSpace:"pre-wrap"}},change.reviewDiff),
+              change.changedFiles?.length && change.reviewDiff && /^[a-f0-9]{32}$/.test(change.id) &&
+                /^[a-f0-9]{64}$/.test(change.digest) &&
+                h("button",{type:"button",disabled:manual.busy,onClick:()=>approvePending(change)},"Approve these changes"),
+            ),
+          ),
+          page?.src && h("iframe",{
+            ref:iframe,key:scope,title,src:page.src,sandbox:"allow-scripts",
+            style:{display:"block",width:"100%",flex:1,minHeight:0,border:0,visibility:page.ready?"visible":"hidden"},
+          }),
+        );
       };
     }
 
