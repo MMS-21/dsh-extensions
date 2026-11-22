@@ -103,7 +103,7 @@ export function apply(ctx, config) {
   function verifyProject(binding, payload) {
     const actual = payload?.state?.project ?? payload?.project;
     if (!actual || (binding.project && !sameProject(binding.project, actual))) {
-      throw new Error('Coordinator project does not match the requested project; no operation dispatched');
+      throw new Error('The report editing connection does not match the requested project. Select the requested report before continuing.');
     }
     return actual;
   }
@@ -459,7 +459,7 @@ export function apply(ctx, config) {
     const disposers = [];
     disposers.push(ctx.tools.register({
       name:'pbi_connect_open_report',
-      description:'Connect directly to the exact open Power BI Desktop .pbip project and list its model tables. No Python coordinator is needed.',
+      description:'Connect directly to the exact open Power BI Desktop .pbip project and list its model tables.',
       parameters:{type:'object',additionalProperties:false,required:['project'],properties:{project:{type:'string'}}},
       output:toolOutput,
       execute:(args, exec) => connectDirect(toolSession(exec), args.project),
@@ -497,7 +497,7 @@ export function apply(ctx, config) {
       parameters:{type:'object',additionalProperties:false,required:['value'],properties:{value:schema}},
       output:toolOutput,execute:(args,exec)=>changeCall(toolSession(exec),operation,args?.value??{})}));
     for (const [name, operation, description] of [
-      ['pbi_check_connection', 'readiness', 'Verify coordinator reachability, exact project identity and Desktop status without modifying the report.'],
+      ['pbi_check_connection', 'readiness', 'Verify the report editing connection, exact project identity and Desktop status without modifying the report.'],
       ['pbi_inspect_semantic_model', 'semantic', 'Read local semantic metadata only. No DAX, M, row reads or model changes. Surface partial inventory warnings and ask about missing business definitions.'],
       ['pbi_validate_project', 'validation', 'Read the authoring CLI validation result, diagnostic codes and schema-coverage limitations. This is separate from Desktop readiness and never reloads or edits files.'],
       ['pbi_get_operation_log', 'journal', 'Read recent operation outcomes and persistent journal locations. Unknown outcomes need inspection before retry.'],
@@ -527,12 +527,12 @@ export function apply(ctx, config) {
 
     disposers.push(ctx.tools.register({
       name: 'pbi_configure',
-      description: 'Bind the Power BI Live Designer for this Session: the loopback URL of the local coordinator service and the target .pbip project. Call before the other pbi_ tools. No Desktop change.',
+      description: 'Bind the confirmed .pbip project for report file editing in this session. For data-only refresh, use pbi_connect_open_report instead. No Desktop change.',
       parameters: {
         type: 'object',
         additionalProperties: false,
         properties: {
-          serviceUrl: { type: 'string', description: 'Loopback URL of the local coordinator service, for example http://127.0.0.1:8765.' },
+          serviceUrl: { type: 'string', description: 'Configured local report editing address, for example http://127.0.0.1:8765.' },
           project: { type: 'string', description: 'Absolute path of the target .pbip project.' },
         },
       },
@@ -544,7 +544,7 @@ export function apply(ctx, config) {
 
     disposers.push(ctx.tools.register({
       name: 'pbi_get_status',
-      description: 'Read the Power BI Live Designer coordinator state for this Session: bound project, last action, refresh phase, pending plan and whether the model adapter is configured. No Desktop change.',
+      description: 'Read the Power BI Live Designer report editing state for this Session: bound project, last action, refresh phase, pending plan and whether the model adapter is configured. No Desktop change.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: toolOutput,
       async execute(_args, exec) {
@@ -597,7 +597,7 @@ export function apply(ctx, config) {
 
     disposers.push(ctx.tools.register({
       name: 'pbi_capture_page',
-      description: 'Capture a Power BI Desktop report page screenshot through the local coordinator and store it as a Session artifact. Capturing does not reload definitions and never discards unsaved Desktop edits.',
+      description: 'Capture a Power BI Desktop report page screenshot and store it as a Session artifact. Capturing does not reload definitions and never discards unsaved Desktop edits.',
       parameters: {
         type: 'object',
         additionalProperties: false,

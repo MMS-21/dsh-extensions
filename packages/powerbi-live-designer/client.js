@@ -60,13 +60,13 @@ window.__ModuleLoader__.load({
         runPlan: "Run approved plan",
         confirmRun: "Run the reviewed refresh plan? Make a backup first. Processing may change the live Desktop model.",
         connected: "Connected to the local Power BI service.",
-        notConnected: "Connect to the local coordinator service to begin.",
+        notConnected: "Connect to the report to use file editing tools.",
         noSession: "Open a Session to use Power BI Live Designer.",
         ready: "Ready",
         working: "Working…"
         ,inspect: "Inspect semantic model (read-only)", journal: "Operation journal", evidence: "Screenshot evidence",
         connectionChecks: "Last connection check", inspection: "Semantic metadata", disconnected: "Not verified",
-        readOnly: "Legacy runner disabled · use chat tools and /pbi approval for file changes and table refresh", serviceReachable: "Service reachable",
+        serviceReachable: "Service reachable",
         projectExists: "Project exists", desktopAccessible: "Desktop accessible", unsavedChanges: "Unsaved Desktop changes"
       },
       zh: {
@@ -103,7 +103,7 @@ window.__ModuleLoader__.load({
         runPlan: "运行已批准的计划",
         confirmRun: "运行已评审的刷新计划？请先备份。处理可能更改实时 Desktop 模型。",
         connected: "已连接到本地 Power BI 服务。",
-        notConnected: "连接本地协调服务以开始。",
+        notConnected: "连接到报表以使用文件编辑工具。",
         noSession: "请打开一个会话以使用 Power BI Live Designer。",
         ready: "就绪",
         working: "处理中…"
@@ -519,7 +519,6 @@ window.__ModuleLoader__.load({
             ),
             connectionChecks ? h('div', {style:css.meta}, t('connectionChecks') + ': ' +
               Object.entries(connectionChecks).map(([key,value]) => t(key) + ': ' + String(value ?? 'unknown')).join(' · ')) : null,
-            !direct?.project && state?.modelWritesEnabled !== true ? h('p', {style:css.hint}, t('readOnly')) : null,
             message === "" ? null : h("div", { role:'status', style: { ...css.meta, color: "var(--dsw-alias-label-tertiary, GrayText)" } }, message)
           ),
           h('section', {style:css.card, 'aria-label':'Refresh Power BI data'},
@@ -591,7 +590,7 @@ window.__ModuleLoader__.load({
             h('div', {style:css.meta}, journal.journalPath),
             h('div', {style:css.meta}, journal.hostJournalPath),
             journal.error ? h('p', {role:'status',style:css.meta}, journal.error) : null,
-            h('pre', {style:css.plan}, JSON.stringify({coordinator:journal.entries,host:journal.hostEntries}, null, 2))) : null,
+            h('pre', {style:css.plan}, JSON.stringify({reportOperations:journal.entries,host:journal.hostEntries}, null, 2))) : null,
           h(
             "details",
             null,
