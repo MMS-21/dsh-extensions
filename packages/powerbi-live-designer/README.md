@@ -12,7 +12,8 @@ chat for each project.
 
 The live pane uses the v6 navigation for Overview, Refresh data, Change
 review, Semantic model, Operation journal, and Evidence. Agent Performance
-stays in the background. Its task activity endpoint summarizes observed
+collects in the background and can be expanded inside **Operation journal**.
+Its task activity endpoint summarizes observed
 Power BI operations and table refreshes from the recent session journal.
 It has no token, cost, or global agent activity source.
 

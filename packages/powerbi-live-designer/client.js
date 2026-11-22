@@ -218,10 +218,61 @@ window.__ModuleLoader__.load({
         padding: 8,
         borderRadius: "var(--dsw-radius-sm, 6px)",
         background: "var(--dsw-alias-bg-layer-2, Canvas)",
-        font: "10px/1.5 ui-monospace, monospace",
+        font: '11px/1.5 "Geist Mono", ui-monospace, monospace',
         margin: "8px 0 0"
       }
     };
+
+    const VIEWS = {
+      overview: ['Overview', 'Project overview'],
+      refresh: ['Refresh data', 'Refresh data'],
+      review: ['Change review', 'Review and approval'],
+      model: ['Semantic model', 'Semantic model'],
+      journal: ['Operation journal', 'Operation journal'],
+      evidence: ['Evidence', 'Screenshot evidence'],
+    };
+    const workspaceCss = `
+      .pbi-v6 {container-type:inline-size; display:block !important; padding:0 !important;
+        font:13px/1.5 Geist,system-ui,sans-serif !important}
+      .pbi-v6 * {box-sizing:border-box}
+      .pbi-v6-brand {display:flex;align-items:center;gap:10px;padding:16px 20px;
+        border-bottom:1px solid var(--dsw-alias-border-l2,#39393d)}
+      .pbi-v6-mark {display:grid;place-items:center;width:30px;height:30px;border-radius:8px;
+        background:#7548a3;color:white;font-weight:650}
+      .pbi-v6-layout {display:grid;min-height:calc(100% - 63px)}
+      .pbi-v6-nav {display:flex;flex-wrap:wrap;gap:4px;padding:10px;
+        border-bottom:1px solid var(--dsw-alias-border-l2,#39393d)}
+      .pbi-v6-nav button {text-align:left;min-height:33px}
+      .pbi-v6-nav button[aria-current="page"],.pbi-v6-nav button:hover {
+        background:var(--dsw-alias-bg-layer-2, ButtonFace) !important}
+      .pbi-v6 button:focus-visible,.pbi-v6 summary:focus-visible {outline:2px solid currentColor;outline-offset:2px}
+      .pbi-v6-content {padding:20px;min-width:0;display:grid;align-content:start;gap:14px}
+      .pbi-v6-content h2 {margin:0;font-size:26px;font-weight:550;letter-spacing:-.035em}
+      .pbi-v6-content p {overflow-wrap:anywhere}
+      .pbi-v6-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,175px),1fr));gap:10px}
+      .pbi-v6-path {display:block;margin-top:10px;overflow-wrap:anywhere;
+        font:12px/1.6 "Geist Mono",ui-monospace,monospace}
+      .pbi-v6-content section > button {margin-top:10px}
+      @container (min-width:620px) {
+        .pbi-v6-layout {grid-template-columns:175px minmax(0,1fr)}
+        .pbi-v6-nav {align-content:start;flex-direction:column;flex-wrap:nowrap;border-bottom:0;
+          border-right:1px solid var(--dsw-alias-border-l2,#39393d)}
+        .pbi-v6-content {padding:24px}
+      }`;
+
+    function performancePanel(activity) {
+      if (!activity?.operationCount) return h('p', {role:'status'}, 'No Power BI operations have been recorded for this task.');
+      const outcomes = Object.entries(activity.outcomes);
+      return h('div', null,
+        h('dl', {className:'pbi-v6-grid'},
+          ...[['Recorded operations',activity.operationCount],['Confirmed table refreshes',activity.tablesRefreshed],
+            ...outcomes.map(([outcome,count])=>[outcome,count])].map(([label,value])=>
+            h('div', {key:label,style:css.card}, h('dt', null,label), h('dd', {style:{margin:0,fontSize:20}},value)))),
+        h('ul', {style:{paddingInlineStart:20}}, ...activity.operations.slice().reverse().map((event,index)=>
+          h('li', {key:index}, progressLabel(event),
+            event.observedDurationMs === null ? '' : ` · ${(event.observedDurationMs / 1000).toFixed(1)} s observed`))),
+      );
+    }
 
     function progressLabel(entry) {
       if (!entry) return 'Project path received';
@@ -258,6 +309,7 @@ window.__ModuleLoader__.load({
         const [directBusy, setDirectBusy] = useState(false);
         const [taskState, setTaskState] = useState(null);
         const [view, setView] = useState("overview");
+        const [performance, setPerformance] = useState(null);
         const task = taskState?.sessionId === sessionId ? taskState.task : null;
         const project = task?.project ?? "";
         const direct = directState?.sessionId === sessionId ? directState : null;
@@ -384,44 +436,53 @@ window.__ModuleLoader__.load({
           return h("div", { style: css.root }, h("div", { style: css.empty }, t("noSession")));
         }
 
-        const overview = h('section', {style:css.card, 'aria-label':'Project overview'},
-          h('h4', {style:css.cardTitle}, task?.project ? 'Project overview' : 'Start with a saved Power BI project'),
-          h('p', {style:css.hint}, task?.project ?? (task?.mode === 'existing'
-            ? 'Open your existing .pbip in Power BI Desktop and paste its full path into this chat.'
-            : 'For a new report, open Power BI Desktop, save a Power BI Project (.pbip), and paste its full path into this chat. For an existing report, open its .pbip and paste that path.')),
-          task?.project && h('p', {role:'status'}, progressLabel(task.latest)),
+        const header = h('header', {className:'pbi-v6-brand'},
+          h('span', {className:'pbi-v6-mark','aria-hidden':true}, '▥'),
+          h('strong', {style:css.title}, t('type.label')),
         );
+        const frame = (...children)=>h('div', {className:'pbi-v6',style:css.root},
+          h('style', null, workspaceCss), header, ...children);
         if (!project) {
-          return h('div', {style:{...css.root,padding:16,fontFamily:'Geist, system-ui, sans-serif'}},
-            h('h3', {style:css.title}, t('type.label')), overview);
+          return frame(h('main', {className:'pbi-v6-content'},
+            h('h2', null, 'Start with a saved Power BI project'),
+            h('section', {style:css.card,'aria-label':'Project setup'},
+              h('ol', null,
+                h('li', null, 'Open Power BI Desktop.'),
+                h('li', null, task?.mode === 'existing' ? 'Open the existing Power BI project (.pbip).'
+                  : task?.mode === 'new' ? 'Save a new Power BI Project (.pbip).'
+                    : 'Save a new Power BI Project (.pbip), or open your existing one.'),
+                h('li', null, 'Paste the full .pbip path into this chat.'),
+              ),
+            ),
+          ));
         }
 
-        return h(
-          "div",
-          { style: {...css.root,padding:16,fontFamily:'Geist, system-ui, sans-serif'} },
-          h(
-            "div",
-            { style: css.header },
-            h("h3", { style: css.title }, t("type.label")),
-            h("span", { style: { ...css.pill, ...(busy || directBusy ? css.pillBusy : null) } },
-              busy || directBusy ? t("working") : direct?.project ? "Connected to Power BI" : "Project selected")
-          ),
-          h("style", null, `.pbi-designer-nav button:focus-visible {
-            outline: 2px solid var(--dsw-alias-label-primary, currentColor);
-            outline-offset: 2px;
-          }`),
-          h('nav', {className:'pbi-designer-nav', style:{...css.row,gap:4}, 'aria-label':'Power BI workspace'},
-            ...Object.entries({
-              overview:'Overview', refresh:'Refresh data', review:'Change review',
-              model:'Semantic model', journal:'Operation journal', evidence:'Evidence',
-            }).map(([id,label])=>h('button', {
+        return frame(h('div', {className:'pbi-v6-layout'},
+          h('nav', {className:'pbi-v6-nav','aria-label':'Power BI workspace'},
+            ...Object.entries(VIEWS).map(([id,[label]])=>h('button', {
               key:id,type:'button','aria-current':view === id ? 'page' : undefined,
-              onClick:()=>setView(id),
-              style:{...css.button,borderColor:'transparent',background:view === id
-                ? 'var(--dsw-alias-fill-secondary, ButtonFace)' : 'transparent'},
+              onClick:()=>setView(id),style:{...css.button,borderColor:'transparent'},
             },label)),
           ),
-          overview,
+          h('main', {className:'pbi-v6-content'},
+          h('h2', null, VIEWS[view][1]),
+          view === 'overview' && h('div', {className:'pbi-v6-grid'},
+            h('section', {style:css.card,'aria-label':'Project configuration'},
+              h('h3', {style:css.cardTitle}, 'Project configuration'),
+              h('code', {className:'pbi-v6-path'}, project),
+            ),
+            h('section', {style:css.card,'aria-label':'Development status'},
+              h('h3', {style:css.cardTitle}, 'Development status'),
+              h('p', {role:'status'}, progressLabel(task.latest)),
+              h('p', {style:css.hint}, direct?.project ? 'Connected to Power BI Desktop' : 'Project selected'),
+            ),
+            h('section', {style:css.card,'aria-label':'Next actions'},
+              h('h3', {style:css.cardTitle}, 'Next actions'),
+              h('button', {type:'button',style:css.button,onClick:()=>setView('review')},'Review changes'),
+              ' ',
+              h('button', {type:'button',style:css.button,onClick:()=>setView('refresh')},'Refresh tables'),
+            ),
+          ),
           message && h('p', {role:'status',style:css.meta}, message),
           view === 'refresh' && h('section', {style:css.card, 'aria-label':'Refresh Power BI data'},
             h('h4', {style:css.cardTitle}, 'Refresh data'),
@@ -496,6 +557,15 @@ window.__ModuleLoader__.load({
             h('h4', {style:css.cardTitle}, t('journal')),
             h('button', {type:'button',style:css.button,disabled:busy,onClick:readJournal},'Read operations'),
           ),
+          view === 'journal' && h('details', {style:css.card,onToggle:event=>{
+            if (event.currentTarget.open) run(async ()=>{
+              const result = await call('task-performance', {});
+              setPerformance({sessionId,activity:result.activity});
+            });
+          }},
+            h('summary', null, 'Agent Performance'),
+            performance?.sessionId === sessionId && performancePanel(performance.activity),
+          ),
           view === 'journal' && journal ? h('details', {open:true}, h('summary', null, t('journal')),
             h('div', {style:css.meta}, journal.journalPath),
             h('div', {style:css.meta}, journal.hostJournalPath),
@@ -518,7 +588,7 @@ window.__ModuleLoader__.load({
                   onError: () => setShotFailed(true)
                 }))
           )
-        );
+        )));
       }
       return Body;
     }

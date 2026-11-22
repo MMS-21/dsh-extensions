@@ -80,6 +80,8 @@ test('sidebar shows setup first, then reveals tools for the confirmed project', 
   const overview=render();
   assert.equal(button(overview,'Overview').props['aria-current'],'page');
   assert.ok(overview.some(node=>node.children.includes('C:\\BI\\Sales.pbip')));
+  assert.ok(overview.some(node=>node.children.includes('Development status')));
+  assert.equal(overview.some(node=>node.children.includes('Agent Performance')),false);
   assert.equal(overview.some(node=>node.type==='input'),false);
   button(overview,'Refresh data').props.onClick();
   const refresh=render();
@@ -91,6 +93,9 @@ test('sidebar shows setup first, then reveals tools for the confirmed project', 
   assert.ok(button(review,'Review pending changes'));
   assert.equal(button(review,'Refresh selected tables'),undefined);
   button(review,'Semantic model').props.onClick();
-  assert.ok(button(render(),'inspect'));
+  const model=render();
+  assert.ok(button(model,'inspect'));
+  button(model,'Operation journal').props.onClick();
+  assert.ok(render().some(node=>node.type==='summary'&&node.children.includes('Agent Performance')));
   stop();
 });
