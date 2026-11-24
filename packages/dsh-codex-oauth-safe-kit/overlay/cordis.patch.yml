@@ -1,0 +1,5 @@
+- insert:
+    - id: codex-oauth-safe
+      name: dsh-codex-oauth-safe
+    - id: codex-oauth-safe-quota
+      name: dsh-codex-oauth-safe/quota-host

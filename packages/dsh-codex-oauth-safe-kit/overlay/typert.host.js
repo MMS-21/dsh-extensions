@@ -1,0 +1,3 @@
+import { z } from 'zod';
+const quota = z.object({status:z.enum(['ok','unavailable','signed-out','expired','vault-locked','rate-limited']),fetchedAt:z.number(),windows:z.array(z.object({label:z.string(),usedPercent:z.number().min(0).max(100),resetAt:z.number().nullable(),durationSeconds:z.number().nullable()}))});
+export const TYPERT={package:'dsh-codex-oauth-safe',face:'host',schemas:[],invocations:[{id:'dsh-codex-oauth-safe#safeCodexQuota/query',service:'safeCodexQuota',namespace:'safeCodexQuota',method:'query',invocation:{kind:'direct'},parameters:[],result:{mode:'strict',typeSymbol:'dsh-codex-oauth-safe#Quota',schema:quota}}],model:{services:[],events:[],objects:[]}};
