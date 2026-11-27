@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Inline Mermaid",
+    "description": "Renders Mermaid code fences as diagrams in chat and keeps the original source available."
+  }
+}

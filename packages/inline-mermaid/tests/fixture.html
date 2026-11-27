@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Inline Mermaid plugin fixture</title>
+<body>
+<main>
+  <div class="md-code-block"><div class="infostring">mermaid</div><pre><code>flowchart LR
+    Check --&gt; Build --&gt; Test --&gt; Release</code></pre></div>
+</main>
+<script>
+window.__ModuleLoader__ = {load(module) {
+  const plugin = module.factory();
+  plugin.apply({effect(start) { window.disposeMermaid = start(); }});
+}};
+</script>
+<script src="../lib/client.js"></script>
+</body>
+</html>

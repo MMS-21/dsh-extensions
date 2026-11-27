@@ -1,0 +1,3 @@
+- insert:
+    - id: inline-mermaid
+      name: '@local/dsh-plugin-inline-mermaid'
