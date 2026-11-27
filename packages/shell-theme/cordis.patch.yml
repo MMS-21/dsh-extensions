@@ -1,0 +1,3 @@
+- insert:
+    - id: shell-theme
+      name: '@local/dsh-shell-theme'

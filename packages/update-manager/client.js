@@ -1,7 +1,7 @@
 window.__ModuleLoader__.load({
   id: '@local/dsh-plugin-update-manager',
   factory(require) {
-    const {createElement: h, useState} = require('react');
+    const {createElement: h, useId, useState} = require('react');
     const labels = {
       'no-newer-release': 'No newer Render UI release was found.',
       'compatible-release': 'A compatible release is available.',
@@ -18,7 +18,7 @@ window.__ModuleLoader__.load({
     };
     const buttonStyle = {
       font: 'inherit', color: 'inherit', padding: '6px 12px', borderRadius: 7,
-      background: 'transparent', border: '1px solid currentColor',
+      minHeight: 36, background: 'transparent', border: '1px solid currentColor',
     };
 
     function apply(ctx) {
@@ -26,6 +26,7 @@ window.__ModuleLoader__.load({
         const [report, setReport] = useState(null);
         const [pending, setPending] = useState('');
         const [error, setError] = useState('');
+        const releaseStatusId = useId();
 
         async function request(action) {
           setPending(action);
@@ -44,22 +45,31 @@ window.__ModuleLoader__.load({
         const release = report?.renderUi;
         const extensions = report?.extensions ?? [];
         const mismatches = extensions.filter(extension => extension.peers?.some(peer => peer.status === 'mismatch'));
-        return h('section', {style:{padding:16, maxWidth:720}, 'aria-label':'Extension Update Manager'},
+        const canDownload = !pending && !error && release?.status === 'compatible-release';
+        const releaseStatus = pending === 'check' ? 'Checking installed extensions and GitHub releases…'
+          : pending === 'stage' ? 'Downloading Render UI and verifying its checksum…'
+          : error ? 'Check again to refresh the available actions.'
+          : !release ? 'Check for updates to see if a Render UI download is available.'
+          : labels[release.status] ?? 'The release status is unavailable. Check again.';
+        return h('section', {style:{padding:16, maxWidth:720, overflowWrap:'anywhere'}, 'aria-label':'Extension Update Manager'},
           h('h2', {style:{margin:'0 0 12px'}}, 'Extension Update Manager'),
-          h('div', {style:{display:'flex', gap:8, flexWrap:'wrap'}},
-            h('button', {type:'button', style:buttonStyle, disabled:Boolean(pending), onClick:() => request('check')},
-              pending === 'check' ? 'Checking…' : 'Check for updates'),
-            release?.status === 'compatible-release' && h('button', {
-              type:'button', style:buttonStyle, disabled:Boolean(pending), onClick:() => request('stage'),
-            }, pending === 'stage' ? 'Verifying…' : 'Download and verify'),
-          ),
+          h('p', {style:{margin:'0 0 12px', maxWidth:'65ch'}},
+            'Check compatibility for installed extensions. Render UI downloads are managed here.'),
+          h('button', {type:'button', style:buttonStyle, 'aria-disabled':Boolean(pending),
+            onClick:() => { if (!pending) void request('check'); },
+          }, 'Check for updates'),
           error && h('p', {role:'alert'}, error),
           mismatches.length > 0 && h('p', {role:'status'},
-            `Incompatible with this DSH version: ${mismatches.map(extension => extension.name).join(', ')}.`),
-          release && h('div', {style:rowStyle, role:'status'},
-            h('strong', null, 'Render UI release check', release.version ? ` · ${release.version}` : ''),
-            h('p', {style:{margin:'6px 0'}}, labels[release.status] ?? release.status),
-            release.reason && h('p', null, release.reason),
+            `Needs a compatible build: ${mismatches.map(extension => extension.name).join(', ')}.`),
+          h('section', {style:rowStyle, 'aria-label':'Render UI update'},
+            h('h3', {style:{margin:'0 0 6px'}}, 'Render UI update', release?.version ? ` · ${release.version}` : ''),
+            h('p', {id:releaseStatusId, role:'status', 'aria-atomic':true, style:{margin:'0 0 10px'}}, releaseStatus),
+            h('button', {type:'button', style:buttonStyle, 'aria-disabled':!canDownload,
+              'aria-describedby':releaseStatusId,
+              onClick:() => { if (canDownload) void request('stage'); },
+            }, 'Download and verify Render UI'),
+            release?.reason && h('p', null, release.reason),
+            release?.status === 'staged' && h('p', null, 'Installation from this panel is pending.'),
           ),
           report && h('div', null,
             h('h3', null, 'Installed extensions'),
@@ -74,9 +84,15 @@ window.__ModuleLoader__.load({
                 h('div', null, incompatible ? 'Incompatible · needs a compatible extension build'
                   : needsReview ? 'Compatibility needs review' : peers.length ? 'DSH peers match' : 'No DSH peer pins declared'),
                 incompatible && extension.name !== '@local/dsh-plugin-render-ui'
-                  && h('div', null, 'Release lookup for this extension is unavailable in Update Manager.'),
-                ...peers.filter(peer => peer.status !== 'match').map(peer => h('div', {key:peer.name},
-                  `${peer.name}: requires ${peer.declared}, found ${peer.actual ?? 'no package'}`)),
+                  && h('p', {style:{margin:'6px 0'}}, 'Update Manager checks compatibility for this extension. To update it, get a build for this DSH version from its maintainer.'),
+                (needsReview || incompatible) && h('details', {style:{marginTop:8}},
+                  h('summary', null, 'Compatibility details'),
+                  extension.error && h('p', null, `Could not read the installed package (${extension.error}).`),
+                  extension.missingClientPackages?.length > 0 && h('p', null,
+                    `Client packages unavailable: ${extension.missingClientPackages.join(', ')}`),
+                  ...peers.filter(peer => peer.status !== 'match').map(peer => h('div', {key:peer.name},
+                    `${peer.name} requires ${peer.declared}. Installed version: ${peer.actual ?? 'unavailable'}.`)),
+                ),
               );
             }),
           ),
