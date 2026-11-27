@@ -165,3 +165,5 @@ Final glass pass: removed custom 56px rail layout and extra tooltips, restoring 
 
 
 Removed the active composer-seat opaque gradient, desktop sidebar tint/shadow and sidebar bottom fade in glass mode. Solid accessibility fallback and drawer backgrounds remain. Transparent native caption controls installed and archive hash verified; both theme copies updated through the backup installer. Build, JavaScript syntax and CSS parsing passed. Final live appearance has not been reviewed.
+
+Sidebar refinement: the resize boundary stays visually quiet until hover or drag. The theme lets the Windows desktop sidebar resize below DSH's 264px limit to 208px and calls the native collapse control when dragged to 196px. The chosen open width is saved locally. Workspace names use 12px text, and the expanded navigation rows sit closer together. Drawer and collapsed layouts retain their native behavior. A browser fixture checked a 230px resize and the collapse threshold; live DSH still needs a visual reload check.

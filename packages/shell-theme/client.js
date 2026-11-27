@@ -70,7 +70,7 @@ window.__ModuleLoader__.load({
   transition: background-color var(--shell-motion) var(--shell-ease);
 }
 .wtg9ga_root:not(.wtg9ga_collapsed) .wtg9ga_panelRow {
-  min-height: 36px;
+  min-height: 32px;
   border-radius: 10px;
   font-size: 14px;
   font-weight: 400;
@@ -367,6 +367,32 @@ window.__ModuleLoader__.load({
   outline-offset: -2px;
 }
 /* Native sidebar layout: component buttons stay in their original slots. */
+.wtg9ga_root:not(.wtg9ga_collapsed) .wtg9ga_panelList { gap: 0; margin-bottom: 4px; }
+.wtg9ga_root:not(.wtg9ga_collapsed) .wtg9ga_scrollArea { grid-template-rows: 4px max-content 0 max-content; }
+.wtg9ga_root:not(.wtg9ga_collapsed) .shell-pinned-wrap { gap: 6px; }
+html[data-windows-titlebar] .mP3x-q_frame:not([data-sidebar-drawer]) .mP3x-q_sidebarCol,
+html[data-windows-titlebar] .mP3x-q_frame:not([data-sidebar-drawer]) .mP3x-q_centerCol {
+  border-inline: 0;
+  box-shadow: none;
+}
+html[data-windows-titlebar] .mP3x-q_handle[data-side="sidebar"]::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 3px;
+  width: 2px;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 38%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease-out;
+}
+html[data-windows-titlebar] .mP3x-q_handle[data-side="sidebar"]:is(:hover,[data-dragging])::after,
+html[data-windows-titlebar] .mP3x-q_frame[data-shell-resize-dragging] .mP3x-q_handle[data-side="sidebar"]::after { opacity: 1; }
+html[data-windows-titlebar] .mP3x-q_frame[data-shell-sidebar-width]:not([data-sidebar-drawer]):not([data-sidebar-collapsed]) {
+  grid-template-columns: var(--shell-sidebar-width) minmax(var(--shell-center-min),1fr) minmax(0px,var(--shell-right-width)) !important;
+  --dsh-windows-sidebar-width: var(--shell-sidebar-width) !important;
+}
+html[data-windows-titlebar] .mP3x-q_frame[data-shell-sidebar-width] .wtg9ga_root:not(.wtg9ga_collapsed) { width: 100% !important; }
+html[data-windows-titlebar] .mP3x-q_frame[data-shell-sidebar-width] .mP3x-q_handle[data-side="sidebar"] { left: var(--shell-sidebar-width) !important; }
 
 /* One material across the rail and adjacent chat pane. No divider or tint. */
 .wtg9ga_root .wtg9ga_panelList,
@@ -505,8 +531,8 @@ window.__ModuleLoader__.load({
 .wtg9ga_root .GAkraW_root:not(.GAkraW_rail) .wnFoaW_projectText,
 .wtg9ga_root .GAkraW_root:not(.GAkraW_rail) .wnFoaW_title {
   font-family: inherit;
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 12px;
+  line-height: 18px;
 }
 .wtg9ga_root .GAkraW_root:not(.GAkraW_rail) .GAkraW_groupSection + .GAkraW_groupSection { margin-top: 8px; }
 .wtg9ga_root .GAkraW_root:not(.GAkraW_rail) .wnFoaW_searchResultRow { border-radius: 10px; }
@@ -613,6 +639,69 @@ window.__ModuleLoader__.load({
 ._1KfHza_actions[data-clock="end"] :is(._1KfHza_action,.Hyy-Wa_action) svg { width:11px; height:11px; }
 
 `;
+    function compactSidebarResize() {
+      const key='dsh.shell.sidebar.width';
+      const frameSelector='.mP3x-q_frame';
+      const handleSelector='.mP3x-q_handle[data-side="sidebar"]';
+      let frame=null, frameObserver=null, active=null, preferred=null;
+      try { const saved=Number(localStorage.getItem(key)); if(saved>=208&&saved<=420)preferred=saved; } catch {}
+      const setVariable=(name,value)=>{if(frame?.style.getPropertyValue(name)!==value)frame?.style.setProperty(name,value);};
+      const refresh=()=>{
+        if(!frame)return;
+        const open=!frame.hasAttribute('data-sidebar-collapsed')&&!frame.hasAttribute('data-sidebar-drawer');
+        if(!open||preferred===null){frame.removeAttribute('data-shell-sidebar-width');return;}
+        const native=frame.style.gridTemplateColumns.match(/^([\d.]+)px minmax\(([\d.]+)px, 1fr\) minmax\(0px, ([\d.]+)px\)$/);
+        if(!native)return;
+        setVariable('--shell-sidebar-width',`${preferred}px`);
+        setVariable('--shell-center-min',`${native[2]}px`);
+        setVariable('--shell-right-width',`${native[3]}px`);
+        if(!frame.hasAttribute('data-shell-sidebar-width'))frame.setAttribute('data-shell-sidebar-width','');
+      };
+      const attach=()=>{
+        const next=document.querySelector(frameSelector);
+        if(next===frame)return;
+        frameObserver?.disconnect();frame=next;
+        if(frame){frameObserver=new MutationObserver(refresh);frameObserver.observe(frame,{attributes:true,attributeFilter:['style','data-sidebar-collapsed','data-sidebar-drawer']});refresh();}
+      };
+      const end=(save=true)=>{
+        if(!active)return;
+        const handle=active.handle,id=active.id;active=null;
+        if(handle.hasPointerCapture(id))handle.releasePointerCapture(id);
+        frame?.removeAttribute('data-shell-resize-dragging');
+        if(save&&preferred!==null)try{localStorage.setItem(key,String(preferred));}catch{}
+      };
+      const down=event=>{
+        const handle=event.target.closest?.(handleSelector);
+        if(!handle||event.button!==0||active||!document.documentElement.hasAttribute('data-windows-titlebar'))return;
+        attach();if(!frame||frame.hasAttribute('data-sidebar-drawer')||frame.hasAttribute('data-sidebar-collapsed'))return;
+        event.preventDefault();event.stopImmediatePropagation();
+        const start=preferred??frame.querySelector('.mP3x-q_sidebarCol')?.getBoundingClientRect().width??280;
+        active={handle,id:event.pointerId,x:event.clientX,width:start};
+        handle.setPointerCapture(event.pointerId);
+        frame.setAttribute('data-shell-resize-dragging','');
+      };
+      const move=event=>{
+        if(!active||event.pointerId!==active.id)return;
+        event.stopImmediatePropagation();
+        const width=Math.min(420,Math.round(active.width+event.clientX-active.x));
+        if(width<=196){
+          end(false);
+          const toggle=frame?.querySelector('[data-sidebar-toggle]');
+          toggle?.click();preferred=null;
+          try{localStorage.removeItem(key);}catch{}
+          if(!toggle||frame?.hasAttribute('data-sidebar-collapsed'))refresh();
+          return;
+        }
+        preferred=Math.max(208,width);refresh();
+      };
+      const up=event=>{if(active&&event.pointerId===active.id){event.stopImmediatePropagation();end();}};
+      document.addEventListener('pointerdown',down,true);
+      document.addEventListener('pointermove',move,true);
+      document.addEventListener('pointerup',up,true);
+      document.addEventListener('pointercancel',up,true);
+      attach();
+      return {attach,dispose(){end(false);frameObserver?.disconnect();document.removeEventListener('pointerdown',down,true);document.removeEventListener('pointermove',move,true);document.removeEventListener('pointerup',up,true);document.removeEventListener('pointercancel',up,true);frame?.removeAttribute('data-shell-sidebar-width');frame?.removeAttribute('data-shell-resize-dragging');}};
+    }
     return {apply(ctx) {
       const id='@local/dsh-shell-theme/sidebar.css';
       document.getElementById(id)?.remove();
@@ -621,6 +710,7 @@ window.__ModuleLoader__.load({
       style.textContent=CSS;
       document.head.appendChild(style);
       const disposeIcons=animatedIcons.mountAnimatedIcons();
+      const sidebarResize=compactSidebarResize();
       const renameNewChat=()=>{
         for(const button of document.querySelectorAll('.wtg9ga_root .wtg9ga_newSession')){
           const label=button.querySelector('.wtg9ga_newSessionLabel');
@@ -629,7 +719,7 @@ window.__ModuleLoader__.load({
         }
       };
       renameNewChat();
-      const labelObserver=new MutationObserver(renameNewChat);
+      const labelObserver=new MutationObserver(()=>{renameNewChat();sidebarResize.attach();});
       labelObserver.observe(document.body,{subtree:true,childList:true});
       // The native hoc slot preserves New chat and owns disposal of our wrapper.
       ctx.inject?.(['slots','sessions','workspaces','uiWorkspace','remoteAccess'],scope=>{
@@ -641,7 +731,7 @@ window.__ModuleLoader__.load({
           unpin:id=>navigation.unpinSession(id)
         })},Pinned));
       });
-      ctx.effect(()=>()=>{ labelObserver.disconnect();disposeIcons();style.remove(); });
+      ctx.effect(()=>()=>{ labelObserver.disconnect();sidebarResize.dispose();disposeIcons();style.remove(); });
     }};
   },
 });
