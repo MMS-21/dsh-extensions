@@ -1,18 +1,59 @@
 {
   "name": "dsh-codex-oauth-safe",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Read-only Codex subscription quota chip for native DSH OAuth",
   "license": "MIT",
   "type": "module",
   "main": "./index.js",
-  "exports": { ".": "./index.js", "./client": "./client.js", "./typert": "./typert.host.js", "./icon": "./icon.svg", "./package.json": "./package.json" },
-  "files": ["index.js", "client.js", "quota-core.mjs", "quota-service.mjs", "quota-schema.mjs", "typert.host.js", "cordis.patch.yml", "icon.svg", "README.md", "LICENSE", "preview.html"],
-  "engines": { "dsh": "0.2.2-rc.5", "node": ">=22.19.0" },
-  "dsh": {
-    "bundle": { "patch": "./cordis.patch.yml" },
-    "client": { "platform": "web", "immediately": true, "inject": ["@deepseek-ai/dsh-api-remotes", "@deepseek-ai/dsh-client-ui-conversation", "@deepseek-ai/dsh-client-ui-model-selection", "@deepseek-ai/dsh-client-ui-session"] }
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./typert": "./typert.host.js",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
   },
-  "peerDependencies": { "@deepseek-ai/dsh-credentials": "0.2.2-rc.5", "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.5" },
-  "scripts": { "test": "node --test tests/*.test.mjs" }
+  "files": [
+    "index.js",
+    "client.js",
+    "quota-core.mjs",
+    "quota-service.mjs",
+    "codex-quota-fallback.mjs",
+    "quota-schema.mjs",
+    "typert.host.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md",
+    "LICENSE",
+    "preview.html",
+    "host-module.mjs",
+    "chatgpt-command.mjs",
+    "codex-compat.mjs"
+  ],
+  "engines": {
+    "dsh": "0.2.2-rc.5",
+    "node": ">=22.19.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-model-selection",
+        "@deepseek-ai/dsh-client-ui-session"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-credentials": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.5"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  }
 }

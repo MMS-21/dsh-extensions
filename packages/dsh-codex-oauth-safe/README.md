@@ -1,6 +1,15 @@
-# DSH Codex OAuth Safe v0.2.0 (development candidate)
+# DSH Codex OAuth Safe v0.2.1
 
-A prebuilt quota companion targeting **DSH 0.2.2-rc.5**. Unlike the old source kit, this relies on DSH's native OpenAI Codex OAuth and credential storage. It does not install a second provider or create an additional credential vault. No build or extra npm runtime dependencies, no installation lifecycle scripts. DSH provides the exact-version peer packages. Desktop and Web use the browser-client slots; live compatibility is not yet verified.
+The current client places the subscription-usage ring in `sidebar.footer.action`
+above the account control, replacing conversation-dock chips. The ring shows
+the highest used percentage across returned quota windows. Its popover shows
+each window, remaining quota, reset time and the snapshot time. It polls every
+60 seconds while visible, refreshes on focus, and offers Check quota. Host-side
+caching remains up to 60 seconds. Unknown quota displays `?`, never a fabricated
+0%. Live account availability depends on the existing read-only native quota
+RPC returning data. Credentials never enter the browser client.
+
+A quota companion targeting **DSH 0.2.2-rc.5**. It reads DSH's native OpenAI Codex OAuth grant. If that quota request is unavailable, it reads normalized limits from the locally installed Codex app-server. The browser client receives only quota metadata. The plugin has no additional runtime dependencies or installation scripts. The desktop quota card was verified in a running DSH instance.
 
 ## Install
 
@@ -14,22 +23,22 @@ npm test
 npm pack --ignore-scripts
 ```
 
-Or use the separately supplied `dsh-codex-oauth-safe-0.2.0.tgz` directly. No npm install is needed to package or run the isolated tests. Install the archive using DSH's plugin manager if supported, or run the CLI (replace the sample absolute path with the actual path):
+Install the resulting archive using DSH's plugin manager if supported, or run the CLI (replace the sample absolute path with the actual path):
 
 ```sh
-dsh plugin --profile desktop add /absolute/path/dsh-codex-oauth-safe-0.2.0.tgz --ignore-scripts
+dsh plugin --profile desktop add /absolute/path/dsh-codex-oauth-safe-0.2.1.tgz --ignore-scripts
 dsh --profile desktop --dump-config
 ```
 
-Replace `desktop` with `web` for the Web profile, or the actual active profile name. Close/restart DSH when appropriate. If host peers are unavailable or a version mismatch is reported, stop rather than disabling checks. Sign in to the native OpenAI Codex provider in DSH Settings → Models, configure/enable it if needed, and select an `openai-codex` model. Complete consent yourself, on the genuine OpenAI authorization domain. This extension does not implement sign-in.
+Replace `desktop` with `web` for the Web profile, or the actual active profile name. Restart DSH to load host changes. If host peers are unavailable or a version mismatch is reported, stop rather than disabling checks. Sign in to the native OpenAI Codex provider in DSH Settings → Models, or use `/chatgpt login`; then select an `openai-codex` model. Complete consent yourself on the genuine OpenAI authorization domain.
 
-The composer displays a quota ring for the native `openai-codex` route. Click for percentages used/remaining and reset timestamps. Quota data refreshes approximately once per minute while visible. DSH token usage remains separate. Unknown data is never reported as zero. Custom route aliases are not recognized; do not use this display with a credential or endpoint override. The example values in preview.html are synthetic.
+The sidebar footer displays a quota ring. Click for percentages used/remaining and reset timestamps. Quota data refreshes approximately once per minute while visible. DSH token usage remains separate. Unknown data is never reported as zero. The example values in preview.html are synthetic.
 
 ## Security and limitations
 
-The host reads only the native `llm-pi-ai/openai-codex` grant using DSH's credential service. It neither enumerates credentials nor writes or refreshes them. The owner-defined grant format is internal, so the package deliberately targets a single DSH version. The quota query sends an existing access token only to `https://chatgpt.com/backend-api/wham/usage`, with redirects rejected, response size and time bounded, and no raw provider bodies logged. This first-party endpoint is internal and may change. Only allowlisted numeric quota metadata reaches the browser RPC. No model tool or shell subprocess. DSH itself remains responsible for credential protection and authentication; the extension does not encrypt or migrate native credentials, and does not isolate same-user processes. This is not an official OpenAI or DeepSeek extension.
+The host reads the native `llm-pi-ai/openai-codex` grant using DSH's credential service. It neither enumerates credentials nor writes or refreshes them. The owner-defined grant format is internal, so the package deliberately targets a single DSH version. The native quota query sends an existing access token only to `https://chatgpt.com/backend-api/wham/usage`, with redirects rejected, response size and time bounded, and no raw provider bodies logged. This first-party endpoint is internal and may change. If it fails, a local Codex app-server subprocess supplies rate limits. Only allowlisted numeric quota metadata reaches the browser RPC. DSH itself remains responsible for credential protection and authentication. This is not an official OpenAI or DeepSeek extension.
 
-Before using a real account, test in a restricted profile: bundle registration, native model selection, quota UI, sign-out, expired credentials, account switching, network errors, and whether the values match the official Codex quota screen. Inspect RPC output and network destinations. No live DSH runtime, real OAuth, or authenticated quota requests were tested in the packaging environment. Local tests use synthetic data. The packaging environment's Node 22.16 is below the declared runtime minimum; run DSH on Node >=22.19 or its supported embedded runtime. Remove with `dsh plugin --profile desktop remove dsh-codex-oauth-safe` (use the actual profile). Native credentials/settings are not deleted.
+The quota card and local Codex fallback were verified in the desktop profile. Local tests use synthetic data. Run DSH on Node >=22.19 or its supported embedded runtime. Remove with `dsh plugin --profile desktop remove dsh-codex-oauth-safe` (use the actual profile). Native credentials/settings are not deleted.
 
 ## Publish to GitHub
 

@@ -1,37 +1,51 @@
-// Native DSH lazy client module; no browser network requests or credential access.
-window.__ModuleLoader__.load({id:'dsh-codex-oauth-safe',factory:(require)=>{
-  const React=require('react'), h=React.createElement;
-  const inject=['slots','remote'];
-  const descriptor={package:'dsh-codex-oauth-safe',descriptors:[{id:'dsh-codex-oauth-safe#safeCodexQuota/query',service:'safeCodexQuota',namespace:'safeCodexQuota',method:'query',invocation:{kind:'direct'},parameters:[],result:{mode:'strict',typeSymbol:'dsh-codex-oauth-safe#Quota',schema:{parse:v=>v}}}]};
-  const statusText={'signed-out':'Sign in to OpenAI Codex in DSH Settings → Models','expired':'Run a native Codex request to refresh, or sign in again','vault-locked':'Native credential store unavailable','rate-limited':'Quota service rate limited','unavailable':'Quota unavailable; not zero usage'};
-  const ring=(percent)=>h('svg',{viewBox:'0 0 24 24',width:19,height:19,'aria-hidden':true},h('circle',{cx:12,cy:12,r:9,fill:'none',stroke:'currentColor',strokeWidth:3,opacity:.18}),percent==null?null:h('circle',{cx:12,cy:12,r:9,fill:'none',stroke:percent>=90?'#e05252':percent>=70?'#d49b35':'#34a853',strokeWidth:3,strokeLinecap:'round',strokeDasharray:`${percent*0.5655} 56.55`,transform:'rotate(-90 12 12)'}));
-  const displayReset=(n)=>n==null?'Reset unavailable':n<=Date.now()?'Reset due; refresh to confirm':`Resets ${new Date(n).toLocaleString()}`;
-  function Chip({directory,load,available,query,seat}) {
-    const subscribe=React.useCallback(cb=>directory?directory.subscribe(cb):()=>{},[directory]);
-    const snapshot=React.useSyncExternalStore(subscribe,()=>directory?directory.getSnapshot():null);
-    const active=available&&snapshot?.current?.provider==='openai-codex'&&snapshot?.routable!=null;
-    const [data,setData]=React.useState(null),[open,setOpen]=React.useState(false),[nonce,refresh]=React.useReducer(x=>x+1,0),[dockPresent,setDockPresent]=React.useState(true);
-    React.useEffect(()=>{if(available)load?.();},[available,directory]);
-    React.useEffect(()=>{if(seat!=='hero')return;const check=()=>setDockPresent(!!document.querySelector('[data-slot="conversation.composer.dock"]'));check();const observer=new MutationObserver(check);observer.observe(document.body,{childList:true,subtree:true});return()=>observer.disconnect();},[seat]);
-    const visible=active&&(seat!=='hero'||!dockPresent);
-    React.useEffect(()=>{if(!visible){setData(null);setOpen(false);return;}let alive=true,busy=false;const tick=async()=>{if(busy)return;busy=true;try{const value=await query();if(alive)setData(value);}catch{if(alive)setData({status:'unavailable',windows:[],fetchedAt:Date.now()});}finally{busy=false;}};tick();const timer=setInterval(tick,60000);return()=>{alive=false;clearInterval(timer);};},[visible,query,nonce]);
-    if(!visible)return null;
-    const windows=data?.status==='ok'&&Array.isArray(data.windows)?data.windows:[];
-    const worst=windows.length?Math.max(...windows.map(w=>w.usedPercent)):null;
-    const summary=windows.length?windows.map(w=>`${w.label}: ${Math.round(w.usedPercent)}% used`).join(' · '):data?statusText[data.status]||'Quota unavailable':'Loading quota…';
-    const buttonStyle={display:'inline-flex',alignItems:'center',gap:6,border:'1px solid currentColor',borderRadius:16,background:'transparent',color:'inherit',font:'inherit',fontSize:11,padding:'3px 8px',cursor:'pointer'};
-    return h('div',{style:{position:'relative',display:'inline-flex',alignItems:'center',justifyContent:'center',maxWidth:'100%'}},h('button',{type:'button',style:buttonStyle,'aria-expanded':open,title:summary,onClick:()=>setOpen(x=>!x)},ring(worst),h('span',null,`Codex · ${summary}`)),open&&h('div',{role:'region','aria-label':'Codex subscription usage',style:{position:'absolute',bottom:'100%',right:0,width:250,zIndex:100,background:'var(--background, Canvas)',color:'var(--foreground, CanvasText)',border:'1px solid currentColor',borderRadius:10,padding:12,boxShadow:'0 4px 20px #0003',fontSize:12}},h('strong',null,'Codex subscription usage'),windows.length?windows.map(w=>h('div',{key:w.label,style:{marginTop:10}},h('div',null,`${w.label}: ${w.usedPercent.toFixed(1)}% used / ${(100-w.usedPercent).toFixed(1)}% left`),h('progress',{max:100,value:w.usedPercent,style:{width:'100%'},'aria-label':`${w.label} usage`}),h('div',null,displayReset(w.resetAt)))):h('p',null,summary),h('p',null,'Native Codex account quota, not token count. Data is cached for up to 60 seconds.'),h('button',{type:'button',style:buttonStyle,onClick:refresh},'Check quota'),h('button',{type:'button',style:{...buttonStyle,marginLeft:6},onClick:()=>setOpen(false)},'Close')));
+// Read-only account quota UI. Credentials and HTTP requests stay on the host.
+window.__ModuleLoader__.load({id:'dsh-codex-oauth-safe',factory(require){
+  const React=require('react'),h=React.createElement;
+  const descriptor={package:'dsh-codex-oauth-safe',descriptors:[{id:'dsh-codex-oauth-safe#safeCodexQuota/query',service:'safeCodexQuota',namespace:'safeCodexQuota',method:'query',invocation:{kind:'direct'},parameters:[],result:{mode:'strict',typeSymbol:'dsh-codex-oauth-safe#Quota',create:()=>({parse:v=>v}),decode:v=>v,encode:v=>v}}]};
+  const messages={'signed-out':'Sign in to ChatGPT in Settings → Models','expired':'ChatGPT sign-in needs refreshing','vault-locked':'Native credential store unavailable','rate-limited':'Quota service rate limited','unavailable':'Quota unavailable; not zero usage'};
+  function Usage({query}){
+    const [data,setData]=React.useState(null),[busy,setBusy]=React.useState(false),[open,setOpen]=React.useState(false);
+    const button=React.useRef(null),panel=React.useRef(null),refreshRef=React.useRef(null),id=React.useId();
+    React.useEffect(()=>{
+      let live=true,pending=false;
+      const refresh=async()=>{if(pending)return;pending=true;if(live)setBusy(true);try{const value=await query();if(live)setData(value);}catch(error){if(live)setData({status:'ui-error',detail:String(error?.message||error).slice(0,160),windows:[],fetchedAt:Date.now()});}finally{pending=false;if(live)setBusy(false);}};
+      refreshRef.current=refresh;const tick=()=>{if(document.visibilityState!=='hidden')refresh();};
+      tick();const timer=setInterval(tick,60000);window.addEventListener('focus',tick);document.addEventListener('visibilitychange',tick);
+      return()=>{live=false;refreshRef.current=null;clearInterval(timer);window.removeEventListener('focus',tick);document.removeEventListener('visibilitychange',tick);};
+    },[query]);
+    const position=()=>{
+      const node=panel.current,anchor=button.current;if(!node?.matches(':popover-open')||!anchor)return;
+      const rect=anchor.getBoundingClientRect(),v=window.visualViewport,left=v?.offsetLeft??0,top=v?.offsetTop??0,width=v?.width??innerWidth,height=v?.height??innerHeight;
+      node.style.maxHeight=Math.max(80,height-24)+'px';const size=node.getBoundingClientRect();
+      node.style.left=Math.max(left+12,Math.min(rect.right+8,left+width-size.width-12))+'px';node.style.top=Math.max(top+12,Math.min(rect.bottom-size.height,top+height-size.height-12))+'px';
+    };
+    React.useEffect(()=>{
+      const node=panel.current;const toggle=()=>{setOpen(node.matches(':popover-open'));position();};node.addEventListener('toggle',toggle);
+      const observer=new ResizeObserver(position);observer.observe(node);window.addEventListener('resize',position);
+      const dismiss=event=>{if(node.matches(':popover-open')&&!node.contains(event.target))node.hidePopover();};window.addEventListener('scroll',dismiss,true);
+      return()=>{node.removeEventListener('toggle',toggle);observer.disconnect();window.removeEventListener('resize',position);window.removeEventListener('scroll',dismiss,true);};
+    },[]);
+    const windows=data?.status==='ok'&&Array.isArray(data.windows)?data.windows.filter(w=>Number.isFinite(w.usedPercent)&&w.usedPercent>=0&&w.usedPercent<=100):[];
+    const used=windows.length?Math.max(...windows.map(w=>w.usedPercent)):null;
+    const summary=windows.length?windows.map(w=>`${w.label}: ${w.usedPercent.toFixed(1)}% used`).join(' · '):data?data.status==='ui-error'?'Quota display error: '+data.detail:(messages[data.status]??messages.unavailable):'Loading subscription usage…';
+    return h('div',{className:'safe-quota-rail'},
+      h('button',{ref:button,type:'button',className:'safe-quota-trigger',popovertarget:id,popovertargetaction:'toggle','aria-label':`Codex subscription usage: ${summary}`,'aria-haspopup':'dialog','aria-expanded':open,title:summary,onClick:()=>requestAnimationFrame(position)},
+        h('svg',{viewBox:'0 0 36 36',width:32,height:32,'aria-hidden':true},h('circle',{cx:18,cy:18,r:15,fill:'none',stroke:'currentColor',strokeWidth:2,opacity:.2}),used===null?null:h('circle',{cx:18,cy:18,r:15,fill:'none',stroke:'currentColor',strokeWidth:2,strokeLinecap:'round',pathLength:100,strokeDasharray:`${used} 100`,transform:'rotate(-90 18 18)'}),h('text',{x:18,y:21,textAnchor:'middle',fill:'currentColor',fontSize:used===null?12:8,fontFamily:'system-ui'},used===null?'?':`${Math.round(used)}%`))),
+      h('div',{ref:panel,id,popover:'auto',role:'dialog','aria-label':'Codex subscription usage',className:'safe-quota-panel',onKeyDown:event=>{if(event.key==='Escape'){panel.current.hidePopover();button.current.focus();}}},h('strong',null,'Codex subscription usage'),
+        windows.length?windows.map(w=>h('section',{key:w.label},h('div',{className:'safe-quota-window'},h('span',null,w.label),h('span',null,`${w.usedPercent.toFixed(1)}% used`)),h('progress',{max:100,value:w.usedPercent,'aria-label':`${w.label} usage`}),h('small',null,`${(100-w.usedPercent).toFixed(1)}% remaining · `,w.resetAt?`Resets ${new Date(w.resetAt).toLocaleString()}`:'Reset time unavailable'))):h('p',{role:'status'},summary),
+        h('p',{className:'safe-quota-note'},'Account quota · refreshes every 60 seconds while visible.'),data?.fetchedAt?h('small',null,`Last checked ${new Date(data.fetchedAt).toLocaleTimeString()}`):null,
+        h('div',{className:'safe-quota-actions'},h('button',{type:'button',disabled:busy,onClick:()=>refreshRef.current?.()},busy?'Checking…':'Check quota'),h('button',{type:'button',onClick:()=>{panel.current.hidePopover();button.current.focus();}},'Close'))));
   }
-  function apply(ctx){
+  return{inject:['slots','remote'],apply(ctx){
     const ready=ctx.remote.$mount(descriptor);
-    const query=async()=>{await ready;const api=ctx.get('remote.safeCodexQuota');if(!api)throw new Error('Quota service unavailable');const result=await api.query();if(!result || result.ok!==true || !result.value)throw new Error('Quota unavailable');return result.value;};
-    ctx.inject(['slots','modelDirectories','sessions','remote','remote.session'],scope=>{
-      const models=scope.get('modelDirectories'),sessions=scope.sessions;
-      for(const [seat,name,order] of [['hero','conversation.input.dock',5],['session','conversation.composer.dock',30]])scope.slots.inject(name,()=>scope.slots.register({name,id:'safe-codex-quota',order,inject:sessionId=>{
-        let directory=null,available=false;try{available=sessions.subagentAddress(sessionId)===undefined;if(available)directory=models.directoryFor(sessionId);}catch{}
-        return {seat,available,directory:directory?.store??null,load:()=>directory?.load().catch(()=>{}),query};
-      }},Chip));
-    });
-  }
-  return {inject,apply};
+    const query=async()=>{await ready;const api=ctx.get('remote.safeCodexQuota');if(!api)throw Error('Quota remote service missing');const result=await api.query();if(result?.ok!==true)throw Error(result?.error?.message||'Quota request rejected');if(!result.value)throw Error('Quota response missing');return result.value;};
+    const style=document.createElement('style');style.textContent=`
+.safe-quota-rail{display:inline-flex;align-items:center;justify-content:center}
+.safe-quota-trigger{display:grid;place-items:center;width:40px;height:40px;padding:0;border:0;border-radius:50%;background:transparent;color:var(--dsw-alias-label-primary,CanvasText);cursor:pointer}
+.safe-quota-trigger:hover{background:var(--dsw-alias-interactive-bg-hover,#8882)}
+.safe-quota-panel{position:fixed;inset:auto;margin:0;box-sizing:border-box;width:300px;max-width:calc(100vw - 24px);overflow:auto;padding:16px;border:0;border-radius:16px;background:var(--dsw-alias-bg-layer-2,Canvas);color:var(--dsw-alias-label-primary,CanvasText);box-shadow:0 8px 32px #0004;font:13px/1.5 system-ui}
+.safe-quota-panel section{margin-top:14px}.safe-quota-window{display:flex;justify-content:space-between;gap:12px}.safe-quota-panel progress{width:100%;height:6px;accent-color:currentColor}.safe-quota-panel small,.safe-quota-note{color:var(--dsw-alias-label-secondary,GrayText)}.safe-quota-actions{display:flex;gap:8px;margin-top:14px}.safe-quota-actions button{border:0;border-radius:8px;padding:7px 10px;background:var(--dsw-alias-interactive-bg-hover,#8882);color:inherit;font:inherit;cursor:pointer}.safe-quota-actions button:disabled{opacity:.5;cursor:wait}.safe-quota-trigger:focus-visible,.safe-quota-actions button:focus-visible{outline:2px solid var(--dsw-focus-ring-color,Highlight);outline-offset:-2px}
+`;document.head.appendChild(style);ctx.effect(()=>()=>style.remove());
+    ctx.slots.inject('sidebar.footer.action',()=>ctx.slots.register({name:'sidebar.footer.action',id:'safe-codex-quota-rail',order:100,inject:()=>({query})},Usage));
+  }};
 }});

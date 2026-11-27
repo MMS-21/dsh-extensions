@@ -9,10 +9,12 @@ test('package has native bundle, exact compatibility, no lifecycle scripts or ru
  assert.equal(p.dependencies,undefined);assert.deepEqual(Object.keys(p.scripts),['test']);
  for(const f of [...p.files,...Object.values(p.exports)])assert.ok(existsSync(new URL('../'+f,import.meta.url)),f);
 });
-test('client registers matching read-only remote and handles result wrapper',()=>{
- let registration;vm.runInNewContext(read('client.js'),{window:{__ModuleLoader__:{load:mod=>{registration=mod;}}}});
+test('rail client queries the matching read-only remote and disposes its stylesheet',async()=>{
+ let registration,removed=false,cleanup,slot,props;
+ vm.runInNewContext(read('client.js'),{window:{__ModuleLoader__:{load:mod=>{registration=mod;}}},document:{createElement:()=>({remove(){removed=true;}}),head:{appendChild(){}}}});
  assert.equal(registration.id,'dsh-codex-oauth-safe');const mod=registration.factory(name=>{assert.equal(name,'react');return {createElement(){}};});
- let descriptor;mod.apply({remote:{$mount:d=>{descriptor=d;return Promise.resolve();}},inject(){}});
+ let descriptor;const snapshot={status:'unavailable',windows:[],fetchedAt:123};
+ mod.apply({remote:{$mount:d=>{descriptor=d;return Promise.resolve();}},get:()=>({query:async()=>({ok:true,value:snapshot})}),effect:fn=>{cleanup=fn();},slots:{inject:(name,fn)=>{assert.equal(name,'sidebar.footer.action');fn();},register:options=>{slot=options;props=options.inject();}}});
  assert.equal(descriptor.descriptors[0].id,TYPERT.invocations[0].id);assert.equal(TYPERT.invocations.length,1);
- assert.equal(TYPERT.invocations[0].method,'query');assert.ok(read('client.js').includes('result.ok!==true'));assert.ok(read('client.js').includes("provider==='openai-codex'"));
+ assert.equal(TYPERT.invocations[0].method,'query');assert.equal(slot.id,'safe-codex-quota-rail');assert.deepEqual(await props.query(),snapshot);cleanup();assert.ok(removed);
 });
