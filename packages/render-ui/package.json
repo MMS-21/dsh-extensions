@@ -54,7 +54,7 @@
   "dependencies": {
     "@openuidev/dashboard-library": "1.0.1",
     "@openuidev/dashboard-library-legacy": "npm:@openuidev/dashboard-library@0.0.1",
-    "@openuidev/react-headless": "0.18.1",
+    "@openuidev/react-headless": "0.18.12",
     "@openuidev/react-lang": "1.1.1",
     "@openuidev/react-ui": "0.18.1",
     "clsx": "^2.1.1",
