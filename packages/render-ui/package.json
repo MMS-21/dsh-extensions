@@ -56,7 +56,7 @@
     "@openuidev/dashboard-library-legacy": "npm:@openuidev/dashboard-library@0.0.1",
     "@openuidev/react-headless": "0.18.1",
     "@openuidev/react-lang": "1.1.1",
-    "@openuidev/react-ui": "0.18.1",
+    "@openuidev/react-ui": "0.18.2",
     "clsx": "^2.1.1",
     "motion": "^14.14.0",
     "react": "19.3.1",
